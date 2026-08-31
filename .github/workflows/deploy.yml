@@ -1,0 +1,99 @@
+# Builds one GitHub Pages site containing BOTH environments:
+#
+#   main    -> https://<user>.github.io/Bike-Fitting-Tool/
+#   develop -> https://<user>.github.io/Bike-Fitting-Tool/dev/
+#
+# A push to either branch rebuilds both, so the two are never out of sync with
+# each other. GitHub Pages serves a single artifact per repository, which is why
+# the development build is nested rather than hosted separately.
+
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deployments race. Queue instead of cancelling, so a push to
+# develop cannot discard an in-flight production deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out production branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: src-main
+
+      - name: Check out development branch
+        id: dev
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          path: src-develop
+
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+
+          # Writes the environment marker the page reads at runtime.
+          # $1 = target dir, $2 = env name, $3 = branch, $4 = checkout dir
+          write_env() {
+            sha="$(git -C "$4" rev-parse --short HEAD)"
+            built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            {
+              printf 'window.BFT_ENV = {\n'
+              printf '  name: "%s",\n'    "$2"
+              printf '  branch: "%s",\n'  "$3"
+              printf '  sha: "%s",\n'     "$sha"
+              printf '  builtAt: "%s"\n'  "$built"
+              printf '};\n'
+            } > "$1/env.js"
+          }
+
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '.gitignore' \
+                src-main/ _site/
+          write_env _site production main src-main
+
+          if [ -d src-develop ]; then
+            mkdir -p _site/dev
+            rsync -a --exclude '.git' --exclude '.github' --exclude '.gitignore' \
+                  src-develop/ _site/dev/
+            write_env _site/dev development develop src-develop
+          else
+            echo "::warning::branch 'develop' not found - development build skipped"
+          fi
+
+          # Keep the development build out of search results.
+          printf 'User-agent: *\nDisallow: /dev/\n' > _site/robots.txt
+
+          echo "--- published tree ---"
+          find _site -maxdepth 2 -not -path '*/.*' | sort
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
