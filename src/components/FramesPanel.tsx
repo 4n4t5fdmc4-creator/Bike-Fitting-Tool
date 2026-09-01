@@ -171,6 +171,14 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
   const [model, setModel] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
   const [legendText, setLegendText] = useState('');
+  /**
+   * Which column carries the size label. No heuristic can settle this: Pinarello
+   * prints both CE (seat tube centre-to-end) and CC (centre-to-centre) and names
+   * its sizes after CC, while other brands use neither. Auto-detected where
+   * possible, always overridable, because getting it wrong silently relabels
+   * every frame - a 550 imported as a 490.
+   */
+  const [sizeColumn, setSizeColumn] = useState<number | null>(null);
 
   const parsed = useMemo(() => {
     const table = splitPaste(text);
@@ -186,16 +194,17 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
         const i = mapping.findIndex((m) => m.field === f);
         return i >= 0 ? parseNumber(r[i] ?? '') : null;
       };
-      const sizeIdx = mapping.findIndex((m) => m.field === 'size');
+      const detected = mapping.findIndex((m) => m.field === 'size');
+      const sizeIdx = sizeColumn ?? (detected >= 0 ? detected : 0);
       return {
-        model, size: (sizeIdx >= 0 ? r[sizeIdx] : r[0]) ?? '',
+        model, size: r[sizeIdx] ?? '',
         stack: get('stack') ?? 0, reach: get('reach') ?? 0,
         headTubeAngle: get('headTubeAngle') ?? 0, seatTubeAngle: get('seatTubeAngle') ?? 0,
         maxSpacerStack: 40, source: 'pasted' as const, sourceUrl,
       };
     });
-    return { orientation, mapping, drafts };
-  }, [text, model, sourceUrl, legendText]);
+    return { orientation, mapping, rows, drafts };
+  }, [text, model, sourceUrl, legendText, sizeColumn]);
 
   const usable = parsed?.drafts.filter((d) => checkBounds(d).length === 0 && d.size !== '') ?? [];
   const rejected = (parsed?.drafts.length ?? 0) - usable.length;
@@ -203,9 +212,25 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
   return (
     <div className="space-y-3 p-4">
       <p className="text-xs text-[var(--text-2)]">
-        Select the geometry table on the manufacturer page, copy it, and paste it here. Nothing is
-        saved until you have seen every value.
+        Select the geometry table on the manufacturer page, copy it, and paste it below. If the
+        columns are letters, copy the legend line too — that is what makes them readable. Nothing is
+        saved until you have looked at every value.
       </p>
+      <details className="text-xs text-[var(--text-3)]">
+        <summary className="cursor-pointer hover:text-[var(--foreground)]">
+          What a paste looks like
+        </summary>
+        <pre className="mt-1.5 overflow-x-auto rounded-md bg-[var(--panel-2)] p-2 font-mono text-[11px] leading-relaxed">{`CE  CC  L   A[°]  B[°]  P   T   REACH  STACK
+410 470 530 74.5  70.25 430 115 368.4  553.2
+440 500 545 74    70.5  430 130 376.1  568.3`}</pre>
+        <p className="mt-1.5">
+          Legend: <code>A[°]: SEAT TUBE ANGLE, B[°]: HEADTUBE ANGLE, P: CHAINSTAY, T: HEADTUBE</code>
+        </p>
+        <p className="mt-1.5">
+          Then set the size column — Pinarello names its sizes after CC, not CE, and no tool can
+          guess that for you.
+        </p>
+      </details>
       <div className="grid gap-2 sm:grid-cols-2">
         <Text label="Model name" v={model} onChange={setModel} placeholder="Specialized Tarmac SL8" />
         <Text label="Source URL" v={sourceUrl} onChange={setSourceUrl} placeholder="https://…" />
@@ -239,6 +264,27 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
               </span>
             ))}
           </p>
+
+          <label className="block text-xs">
+            <span className="text-[var(--text-2)]">
+              Size column{' '}
+              <span className="text-[var(--text-3)]">
+                — which column holds the size name the brand actually uses
+              </span>
+            </span>
+            <select
+              value={sizeColumn ?? ''}
+              onChange={(e) => setSizeColumn(e.target.value === '' ? null : Number(e.target.value))}
+              className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm sm:max-w-md"
+            >
+              <option value="">Auto — first column</option>
+              {parsed.rows.headers.map((h, i) => (
+                <option key={i} value={i}>
+                  {h || `column ${i + 1}`} → {parsed.rows.rows.map((r) => r[i]).slice(0, 4).join(', ')}…
+                </option>
+              ))}
+            </select>
+          </label>
 
           <div className="overflow-x-auto rounded-md border border-[var(--border)]">
             <table className="tabular w-full min-w-[32rem] text-xs">
