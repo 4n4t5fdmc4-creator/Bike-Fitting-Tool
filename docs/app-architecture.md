@@ -483,7 +483,7 @@ surface, per the palette reference.
 
 Each phase ends with something verifiable in CI or visible at `/dev/`.
 
-### Phase 0 — Toolchain migration *(highest risk)*
+### Phase 0 — Toolchain migration ✅ *done*
 
 Next.js static export, Tailwind, shadcn, and a deploy workflow that builds both
 branches with their own `basePath`.
@@ -493,6 +493,36 @@ branches with their own `basePath`.
   with `/Bike-Fitting-Tool/dev`, assemble one artifact.
 - shadcn initialised non-interactively; `components.json` committed.
 - **Exit:** both URLs serve a Next-rendered page; typecheck and build green.
+
+**What actually happened.** Next 16, React 19, Tailwind 4, shadcn/ui. Three
+things the plan did not anticipate:
+
+1. **Turbopack does not resolve `./x.js` to `./x.ts`.** The engine and domain
+   layers were written with NodeNext-style `.js` import extensions, which tsc and
+   Vitest both accept. Turbopack does not, so the extensions were dropped across
+   `src/`. This is correct anyway: the project uses `moduleResolution: "bundler"`,
+   under which extensionless imports are the convention and `.js` was never
+   required.
+
+2. **The dark theme is now a commitment, not a preference.** shadcn ships a
+   `.dark` class variant; the design tokens here were written against
+   `prefers-color-scheme`. Two mechanisms writing the same variables left roughly
+   thirty shadcn tokens (`primary`, `popover`, `ring`, …) stuck at their light
+   values in dark mode — visibly half-broken. Rather than duplicate the whole
+   token contract across three selectors, the app sets `class="dark"` on `<html>`
+   and runs one token set. A light theme returns in Phase 6 behind a theme
+   provider, which is where that belongs.
+
+3. **The deploy workflow has to survive the migration itself.** A push to
+   `develop` runs `develop`'s workflow, which also builds `main` — and `main` was
+   still plain static HTML. Each checkout is therefore detected independently:
+   a Next config means build, no Next config means publish an allow-list of
+   static files. The legacy branch of that function can be deleted once both
+   branches are Next apps.
+
+The Phase 0 page is not the product. It renders the calibration run **at build
+time** from `src/engine`, which proves the static export, the engine and the
+design tokens work together with no client-side maths and no server.
 
 ### Phase 1 — Engine *(no UI)*
 

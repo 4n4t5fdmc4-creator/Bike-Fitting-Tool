@@ -7,10 +7,10 @@
  * terms, because a term that silently absorbs interactions is not an attribution.
  */
 
-import type { Millimeters } from '../domain/units.js';
-import { mm } from '../domain/units.js';
-import type { FrameCore, ResolvedCockpit } from './forward.js';
-import { gripPoint } from './forward.js';
+import type { Millimeters } from '../domain/units';
+import { mm } from '../domain/units';
+import type { FrameCore, ResolvedCockpit } from './forward';
+import { gripPoint } from './forward';
 
 export type AttributableProperty = 'stack' | 'reach' | 'headTubeAngle';
 

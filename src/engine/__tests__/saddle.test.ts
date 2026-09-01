@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deg, mm } from '../../domain/units.js';
-import { evaluateSaddle } from '../saddle.js';
+import { deg, mm } from '../../domain/units';
+import { evaluateSaddle } from '../saddle';
 
 /**
  * Clamp to 70 mm width point. Stable at ~40 mm across saddle models - that is

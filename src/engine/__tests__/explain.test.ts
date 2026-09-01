@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deg, mm } from '../../domain/units.js';
-import type { FrameCore } from '../forward.js';
-import { gripPoint } from '../forward.js';
-import { resolveCockpit } from '../assumptions.js';
-import { evaluateFrame } from '../score.js';
-import { explain, primaryFlag } from '../explain.js';
+import { deg, mm } from '../../domain/units';
+import type { FrameCore } from '../forward';
+import { gripPoint } from '../forward';
+import { resolveCockpit } from '../assumptions';
+import { evaluateFrame } from '../score';
+import { explain, primaryFlag } from '../explain';
 
 const frame = (stack: number, reach: number, hta: number): FrameCore => ({
   stack: mm(stack), reach: mm(reach), headTubeAngle: deg(hta),

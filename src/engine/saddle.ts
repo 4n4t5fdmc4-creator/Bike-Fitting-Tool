@@ -7,8 +7,8 @@
  * drives the score. See docs/product-spec.md principle P0.
  */
 
-import type { Degrees, Millimeters } from '../domain/units.js';
-import { mm, toRad } from '../domain/units.js';
+import type { Degrees, Millimeters } from '../domain/units';
+import { mm, toRad } from '../domain/units';
 
 export interface SeatpostOption {
   readonly setback: Millimeters;

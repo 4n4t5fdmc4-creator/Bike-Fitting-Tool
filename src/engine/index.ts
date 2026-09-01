@@ -12,11 +12,11 @@
  *   explain.ts      clause assembly
  */
 
-export * from './forward.js';
-export * from './solve.js';
-export * from './assumptions.js';
-export * from './score.js';
-export * from './saddle.js';
-export * from './attribute.js';
-export * from './phrases.js';
-export * from './explain.js';
+export * from './forward';
+export * from './solve';
+export * from './assumptions';
+export * from './score';
+export * from './saddle';
+export * from './attribute';
+export * from './phrases';
+export * from './explain';

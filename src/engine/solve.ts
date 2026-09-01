@@ -9,10 +9,10 @@
  * See docs/scoring-engine.md section 5 for the derivation.
  */
 
-import type { BbPoint, Degrees, Millimeters } from '../domain/units.js';
-import { deg, mm, toRad } from '../domain/units.js';
-import type { FrameCore, ResolvedCockpit } from './forward.js';
-import { hoodOffset } from './forward.js';
+import type { BbPoint, Degrees, Millimeters } from '../domain/units';
+import { deg, mm, toRad } from '../domain/units';
+import type { FrameCore, ResolvedCockpit } from './forward';
+import { hoodOffset } from './forward';
 
 /** Stem angles a shop actually stocks. */
 export const CATALOGUE_STEM_ANGLES: ReadonlyArray<Degrees> = [

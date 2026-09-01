@@ -11,10 +11,10 @@
  *   validation.ts  plausibility bounds, cross-field rules, default assumptions
  */
 
-export * from './units.js';
-export * from './rider.js';
-export * from './geometry.js';
-export * from './components.js';
-export * from './fit.js';
-export * from './scoring.js';
-export * from './validation.js';
+export * from './units';
+export * from './rider';
+export * from './geometry';
+export * from './components';
+export * from './fit';
+export * from './scoring';
+export * from './validation';

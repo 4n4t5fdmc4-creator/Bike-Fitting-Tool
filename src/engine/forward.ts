@@ -5,8 +5,8 @@
  * domain layer - see docs/app-architecture.md section 3.
  */
 
-import type { BbPoint, Degrees, Millimeters } from '../domain/units.js';
-import { mm, toRad } from '../domain/units.js';
+import type { BbPoint, Degrees, Millimeters } from '../domain/units';
+import { mm, toRad } from '../domain/units';
 
 /** The frame properties the forward model needs. */
 export interface FrameCore {

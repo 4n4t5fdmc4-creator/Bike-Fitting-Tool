@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandOf, compare } from '../phrases.js';
+import { bandOf, compare } from '../phrases';
 
 describe('magnitude bands', () => {
   it('treats anything under 5 mm as no difference', () => {

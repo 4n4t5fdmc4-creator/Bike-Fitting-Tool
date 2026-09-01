@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { deg, mm } from '../../domain/units.js';
-import type { FrameCore } from '../forward.js';
-import { resolveCockpit } from '../assumptions.js';
-import { attribute } from '../attribute.js';
+import { deg, mm } from '../../domain/units';
+import type { FrameCore } from '../forward';
+import { resolveCockpit } from '../assumptions';
+import { attribute } from '../attribute';
 
 const frame = (stack: number, reach: number, hta: number): FrameCore => ({
   stack: mm(stack), reach: mm(reach), headTubeAngle: deg(hta),

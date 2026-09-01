@@ -3,9 +3,14 @@
 #   main    -> https://<user>.github.io/Bike-Fitting-Tool/
 #   develop -> https://<user>.github.io/Bike-Fitting-Tool/dev/
 #
-# A push to either branch rebuilds both, so the two are never out of sync with
-# each other. GitHub Pages serves a single artifact per repository, which is why
-# the development build is nested rather than hosted separately.
+# Next.js bakes basePath in at build time, so the two environments are two
+# separate BUILDS, not one artifact copied twice.
+#
+# During the migration the two branches are not the same kind of project: one
+# may still be plain static HTML while the other is already a Next app. Each
+# checkout is therefore detected independently - if it has a Next config it is
+# built, otherwise its files are published as they are. That is what lets
+# develop move to Next without main breaking. See app-architecture.md risk R1.
 
 name: Deploy Pages
 
@@ -19,11 +24,12 @@ permissions:
   pages: write
   id-token: write
 
-# Never let two deployments race. Queue instead of cancelling, so a push to
-# develop cannot discard an in-flight production deployment.
 concurrency:
   group: pages
   cancel-in-progress: false
+
+env:
+  SITE_BASE: /Bike-Fitting-Tool
 
 jobs:
   build:
@@ -43,35 +49,56 @@ jobs:
           ref: develop
           path: src-develop
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Assemble site
         run: |
           set -euo pipefail
 
-          # Writes the environment marker the page reads at runtime.
-          # $1 = target dir, $2 = env name, $3 = branch, $4 = checkout dir
-          write_env() {
-            sha="$(git -C "$4" rev-parse --short HEAD)"
-            built="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            {
-              printf 'window.BFT_ENV = {\n'
-              printf '  name: "%s",\n'    "$2"
-              printf '  branch: "%s",\n'  "$3"
-              printf '  sha: "%s",\n'     "$sha"
-              printf '  builtAt: "%s"\n'  "$built"
-              printf '};\n'
-            } > "$1/env.js"
+          # $1 checkout dir, $2 output dir, $3 basePath, $4 env name
+          build_env() {
+            local src="$1" out="$2" base="$3" name="$4"
+            local sha
+            sha="$(git -C "$src" rev-parse --short HEAD)"
+            mkdir -p "$out"
+
+            if [ -f "$src/next.config.mjs" ] || [ -f "$src/next.config.js" ]; then
+              echo "::group::Building $name with Next.js (basePath $base)"
+              ( cd "$src" \
+                && npm ci --no-audit --no-fund \
+                && BASE_PATH="$base" \
+                   NEXT_PUBLIC_ENV_NAME="$name" \
+                   NEXT_PUBLIC_ENV_SHA="$sha" \
+                   npm run build )
+              # `output: export` writes to out/
+              rsync -a "$src/out/" "$out/"
+              echo "::endgroup::"
+            else
+              # Legacy path: the branch is still plain static HTML. Copy only
+              # what is meant to be public - an allow-list, so config files and
+              # sources cannot leak in by accident. This branch of the function
+              # can be deleted once both branches are Next apps.
+              echo "::notice::$name has no Next config - publishing its static files"
+              cp "$src/index.html" "$out/"
+              [ -d "$src/assets" ] && rsync -a "$src/assets/" "$out/assets/"
+              # The legacy static page reads this at runtime.
+              {
+                printf 'window.BFT_ENV = {\n'
+                printf '  name: "%s",\n'   "$name"
+                printf '  sha: "%s",\n'    "$sha"
+                printf '  builtAt: "%s"\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                printf '};\n'
+              } > "$out/env.js"
+            fi
           }
 
           mkdir -p _site
-          rsync -a --exclude '.git' --exclude '.github' --exclude '.gitignore' \
-                src-main/ _site/
-          write_env _site production main src-main
+          build_env src-main _site "$SITE_BASE" production
 
           if [ -d src-develop ]; then
-            mkdir -p _site/dev
-            rsync -a --exclude '.git' --exclude '.github' --exclude '.gitignore' \
-                  src-develop/ _site/dev/
-            write_env _site/dev development develop src-develop
+            build_env src-develop _site/dev "$SITE_BASE/dev" development
           else
             echo "::warning::branch 'develop' not found - development build skipped"
           fi
@@ -80,7 +107,7 @@ jobs:
           printf 'User-agent: *\nDisallow: /dev/\n' > _site/robots.txt
 
           echo "--- published tree ---"
-          find _site -maxdepth 2 -not -path '*/.*' | sort
+          find _site -maxdepth 2 -not -path '*/.*' | sort | head -40
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

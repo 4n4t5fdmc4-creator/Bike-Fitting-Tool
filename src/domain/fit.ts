@@ -3,10 +3,10 @@
  * component list to a position.
  */
 
-import type { Millimeters, BbPoint, Sourced, Degrees } from './units.js';
-import type { CockpitSetup, ChangeBudget, ComponentLibrary } from './components.js';
-import type { FrameGeometry, FrameSize, BikeModel } from './geometry.js';
-import type { IdealFitProfile, TargetRange } from './rider.js';
+import type { Millimeters, BbPoint, Sourced, Degrees } from './units';
+import type { CockpitSetup, ChangeBudget, ComponentLibrary } from './components';
+import type { FrameGeometry, FrameSize, BikeModel } from './geometry';
+import type { IdealFitProfile, TargetRange } from './rider';
 
 /**
  * Where the rider actually touches the bike, in BB-relative coordinates.

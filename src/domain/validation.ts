@@ -9,9 +9,9 @@
  * 10 mm should get a nudge, not a locked form.
  */
 
-import type { Millimeters, Degrees } from './units.js';
-import { mm, deg, sourced } from './units.js';
-import type { FitAssumptions } from './fit.js';
+import type { Millimeters, Degrees } from './units';
+import { mm, deg, sourced } from './units';
+import type { FitAssumptions } from './fit';
 
 export type Severity = 'error' | 'warning';
 

@@ -8,16 +8,16 @@
  * See docs/scoring-engine.md section 3.
  */
 
-import type { BbPoint, Millimeters, Score } from '../domain/units.js';
-import { mm, score as toScore } from '../domain/units.js';
-import type { FitFlag, FitVerdict, PenaltyBreakdown } from '../domain/scoring.js';
-import { PENALTY_WEIGHTS as W, SCORE_THRESHOLDS as T } from '../domain/scoring.js';
-import type { FrameCore, ResolvedCockpit } from './forward.js';
-import { gripPoint } from './forward.js';
-import type { CockpitSolution } from './solve.js';
-import { solveAll } from './solve.js';
-import type { CockpitLimits } from './assumptions.js';
-import { DEFAULT_LIMITS, clamp, snapStem } from './assumptions.js';
+import type { BbPoint, Millimeters, Score } from '../domain/units';
+import { mm, score as toScore } from '../domain/units';
+import type { FitFlag, FitVerdict, PenaltyBreakdown } from '../domain/scoring';
+import { PENALTY_WEIGHTS as W, SCORE_THRESHOLDS as T } from '../domain/scoring';
+import type { FrameCore, ResolvedCockpit } from './forward';
+import { gripPoint } from './forward';
+import type { CockpitSolution } from './solve';
+import { solveAll } from './solve';
+import type { CockpitLimits } from './assumptions';
+import { DEFAULT_LIMITS, clamp, snapStem } from './assumptions';
 
 export interface FrameEvaluation {
   readonly frame: FrameCore;

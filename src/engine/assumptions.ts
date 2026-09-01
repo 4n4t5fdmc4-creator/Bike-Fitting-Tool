@@ -4,10 +4,10 @@
  * ever has to guess a missing value.
  */
 
-import type { Degrees, Millimeters } from '../domain/units.js';
-import { deg, mm } from '../domain/units.js';
-import { DEFAULT_ASSUMPTIONS } from '../domain/validation.js';
-import type { ResolvedCockpit } from './forward.js';
+import type { Degrees, Millimeters } from '../domain/units';
+import { deg, mm } from '../domain/units';
+import { DEFAULT_ASSUMPTIONS } from '../domain/validation';
+import type { ResolvedCockpit } from './forward';
 
 /** Physical limits on what can actually be built. */
 export interface CockpitLimits {

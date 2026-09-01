@@ -14,9 +14,9 @@
  *    caller to say which one they have makes that impossible to ignore.
  */
 
-import type { Degrees, Millimeters, Ratio, Sourced } from './units.js';
-import type { CockpitSetup } from './components.js';
-import type { ContactPoints } from './fit.js';
+import type { Degrees, Millimeters, Ratio, Sourced } from './units';
+import type { CockpitSetup } from './components';
+import type { ContactPoints } from './fit';
 
 /**
  * Seat tube angle. The distinction matters enough to encode in the type.

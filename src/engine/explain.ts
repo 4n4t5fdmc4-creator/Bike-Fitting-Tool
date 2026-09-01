@@ -7,10 +7,10 @@
  * See docs/explanation-system.md.
  */
 
-import type { FitFlag } from '../domain/scoring.js';
-import type { FrameEvaluation } from './score.js';
-import { DEFAULT_LIMITS } from './assumptions.js';
-import { compare } from './phrases.js';
+import type { FitFlag } from '../domain/scoring';
+import type { FrameEvaluation } from './score';
+import { DEFAULT_LIMITS } from './assumptions';
+import { compare } from './phrases';
 
 export interface Explanation {
   /** What to do. Always present, always one sentence. */

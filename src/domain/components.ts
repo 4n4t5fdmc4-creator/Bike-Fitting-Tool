@@ -6,7 +6,7 @@
  * produced arithmetic, not advice.
  */
 
-import type { Degrees, Grams, Millimeters, Sourced } from './units.js';
+import type { Degrees, Grams, Millimeters, Sourced } from './units';
 
 // --- Stem ------------------------------------------------------------------
 
