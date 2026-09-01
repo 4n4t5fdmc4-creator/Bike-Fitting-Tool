@@ -4,6 +4,9 @@ env.js
 # OS noise
 .DS_Store
 
+# Local Claude Code helpers (machine-specific paths)
+.claude/
+
 # Node
 node_modules/
 .next/
