@@ -60,8 +60,9 @@ function FrameList({ frames, onRemove }: { frames: StoredFrame[]; onRemove: (id:
   if (frames.length === 0) {
     return (
       <p className="px-4 py-6 text-sm text-[var(--text-2)]">
-        No frames entered yet. Add one by hand, or copy a geometry table from a manufacturer page
-        and paste it. Until then the recommendations run on example data.
+        No frames of your own yet. Recommendations currently run on the verified Pinarello F9 and
+        X5 tables that ship with the tool. Add a frame by hand, or copy a geometry table from a
+        manufacturer page and paste it — including the legend line if the columns are letters.
       </p>
     );
   }

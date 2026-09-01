@@ -5,14 +5,13 @@ import { deg, mm } from '@/domain/units';
 import { gripPoint } from '@/engine/forward';
 import { deriveTarget } from '@/engine/target';
 import { resolveCockpit } from '@/engine/assumptions';
-import { evaluateFrame } from '@/engine/score';
-import { explain } from '@/engine/explain';
+import { recommendByModel } from '@/engine/recommend';
 import { FRAME_LIBRARY } from '@/data/frames';
 import { useStudio } from '@/state/studio';
 import { ClientPanel } from './ClientPanel';
 import { ReferenceBikePanel } from './ReferenceBikePanel';
 import { FramesPanel } from './FramesPanel';
-import { ResultCard } from './ResultCard';
+import { ModelCard } from './ModelCard';
 import { StatRow } from './StatRow';
 
 export function Workspace() {
@@ -80,18 +79,12 @@ export function Workspace() {
 
   const usingExamples = storedFrames.length === 0;
 
-  const results = useMemo(() => {
-    if (!target) return [];
-    const base = resolveCockpit();
-    return catalogue.map((frame) => {
-      const evaluation = evaluateFrame(frame, target.grip, base, undefined, frame.maxSpacerStack);
-      return {
-        frame,
-        evaluation,
-        explanation: explain(evaluation, `${frame.model} ${frame.size}`, frame.maxSpacerStack),
-      };
-    }).sort((a, b) => b.evaluation.composite - a.evaluation.composite);
-  }, [target, catalogue]);
+  // Grouped by model: the question is which SIZE of a bike, not which of forty
+  // rows. Every size stays available behind the recommendation.
+  const models = useMemo(
+    () => (target ? recommendByModel(catalogue, target.grip, resolveCockpit()) : []),
+    [target, catalogue],
+  );
 
   if (!ready) {
     return (
@@ -130,9 +123,11 @@ export function Workspace() {
     );
   }
 
-  const excellent = results.filter((r) => r.evaluation.verdict === 'excellentFit').length;
-  const top = results.slice(0, 5);
-  const rest = results.slice(5);
+  const excellent = models.filter((m) => m.best.evaluation.verdict === 'excellentFit').length;
+  const referenceLabel =
+    client.targetMode === 'reference' && client.referenceBike?.label
+      ? client.referenceBike.label
+      : 'target position';
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -143,7 +138,7 @@ export function Workspace() {
         <StatRow
           target={target}
           fitting={excellent}
-          total={results.length}
+          total={models.length}
           measured={client.targetMode === 'reference' && client.referenceBike !== null}
         />
       )}
@@ -157,39 +152,26 @@ export function Workspace() {
           </h2>
           <span className="text-xs text-[var(--text-3)]">
             {usingExamples
-              ? 'example geometry — add your own frames above'
-              : `${catalogue.length} frames you entered`}
+              ? `${catalogue.length} verified sizes from Pinarello — add your own above`
+              : `${catalogue.length} sizes you entered`}
           </span>
         </div>
 
         <p className="mt-2 text-sm text-[var(--text-2)]">
           {excellent > 0 ? (
-            <>
-              <b className="text-[var(--foreground)]">{excellent}</b> of {results.length} frames
-              reach this position with an ordinary cockpit.
-            </>
+            <><b className="text-[var(--foreground)]">{excellent}</b> of {models.length} models can be
+            built to this exact position.</>
           ) : (
-            <>
-              <b className="text-[var(--foreground)]">No frame here reaches this position with an
-              ordinary cockpit.</b>{' '}
-              A low position on a small frame runs out of head tube before it runs out of spacers.
-              These came closest.
-            </>
+            <><b className="text-[var(--foreground)]">None of these models reaches this position with
+            ordinary parts.</b> Closest first, each with what it would take.</>
           )}
         </p>
 
         <ul className="mt-3 space-y-2">
-          {top.map((r) => <ResultCard key={r.frame.id} {...r} />)}
+          {models.map((m) => (
+            <ModelCard key={m.model} rec={m} referenceLabel={referenceLabel} />
+          ))}
         </ul>
-
-        <details className="mt-5">
-          <summary className="cursor-pointer text-sm text-[var(--text-3)] hover:text-[var(--foreground)]">
-            Show the remaining {rest.length} frames — each with its reason
-          </summary>
-          <ul className="mt-3 space-y-2">
-            {rest.map((r) => <ResultCard key={r.frame.id} {...r} />)}
-          </ul>
-        </details>
       </section>
     </div>
   );

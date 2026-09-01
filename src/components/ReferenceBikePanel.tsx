@@ -4,6 +4,7 @@ import { mm, deg } from '@/domain/units';
 import { gripPoint } from '@/engine/forward';
 import { resolveCockpit } from '@/engine/assumptions';
 import { useStudio, DEFAULT_REFERENCE, type Client } from '@/state/studio';
+import { BAR_LIBRARY, barById } from '@/data/handlebars';
 
 /**
  * The client's current bike as the target.
@@ -85,12 +86,33 @@ export function ReferenceBikePanel({ client }: { client: Client }) {
           <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)]">
             Cockpit — as actually ridden
           </p>
-          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <Num label="Stem" v={ref?.stemLength} onChange={(v) => set({ stemLength: v })} unit="mm" />
             <Num label="Stem angle" v={ref?.stemAngle} onChange={(v) => set({ stemAngle: v })} unit="°" />
             <Num label="Spacers" v={ref?.spacerHeight} onChange={(v) => set({ spacerHeight: v })} unit="mm" />
-            <Num label="Bar reach" v={ref?.barReach} onChange={(v) => set({ barReach: v })} unit="mm" />
-            <Num label="Bar rise" v={ref?.barRise} onChange={(v) => set({ barRise: v })} unit="mm" />
+          </div>
+
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)]">
+            Handlebar — moves the hands more than a frame size does
+          </p>
+          <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <label className="block text-xs sm:col-span-1">
+              <span className="text-[var(--text-2)]">Model</span>
+              <select
+                value={ref?.barId ?? 'generic-compact'}
+                onChange={(e) => {
+                  const bar = barById(e.target.value);
+                  set(bar && bar.id !== 'custom'
+                    ? { barId: bar.id, barReach: bar.reach, barRise: bar.rise }
+                    : { barId: 'custom' });
+                }}
+                className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
+              >
+                {BAR_LIBRARY.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </label>
+            <Num label="Bar reach" v={ref?.barReach} onChange={(v) => set({ barReach: v, barId: 'custom' })} unit="mm" />
+            <Num label="Bar rise" v={ref?.barRise} onChange={(v) => set({ barRise: v, barId: 'custom' })} unit="mm" />
           </div>
 
           {grip && (

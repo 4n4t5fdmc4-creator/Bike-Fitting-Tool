@@ -56,6 +56,8 @@ export interface ReferenceBike {
   spacerHeight: number;
   barReach: number;
   barRise: number;
+  /** Library id, or 'custom' when the numbers were typed by hand. */
+  barId: string;
 }
 
 export interface Client {
@@ -99,7 +101,7 @@ export const DEFAULT_REFERENCE: ReferenceBike = {
   label: 'Current bike',
   stack: 570, reach: 380, headTubeAngle: 72,
   stemLength: 100, stemAngle: -6, spacerHeight: 20,
-  barReach: 80, barRise: 0,
+  barReach: 80, barRise: 0, barId: 'generic-compact',
 };
 
 interface StudioState {
