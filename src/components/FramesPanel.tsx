@@ -15,6 +15,13 @@ const BOUNDS: Partial<Record<FieldKey, [number, number]>> = {
 
 type Draft = Omit<StoredFrame, 'id' | 'addedAt'>;
 
+/** Fields a column can be assigned to by hand. */
+const FIELD_OPTIONS: ReadonlyArray<FieldKey> = [
+  'size', 'stack', 'reach', 'headTubeAngle', 'seatTubeAngle',
+  'headTubeLength', 'seatTubeLength', 'chainstay', 'wheelbase',
+  'bbDrop', 'forkRake', 'standover',
+];
+
 /**
  * Getting real geometry in.
  *
@@ -179,6 +186,13 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
    * every frame - a 550 imported as a 490.
    */
   const [sizeColumn, setSizeColumn] = useState<number | null>(null);
+  /**
+   * Per-column overrides. Chasing every brand's vocabulary does not scale -
+   * Basso calls the head tube angle "Steering Tube Angle", the next brand will
+   * call it something else again. So an unrecognised column is not a dead end:
+   * the fitter assigns it, and the import proceeds.
+   */
+  const [overrides, setOverrides] = useState<Record<number, FieldKey | ''>>({});
 
   const parsed = useMemo(() => {
     const table = splitPaste(text);
@@ -188,7 +202,14 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
     // Several brands label columns with letters keyed to a drawing. Pasting the
     // legend alongside the table is what makes those readable.
     const legend = parseLegend(legendText);
-    const mapping = rows.headers.map((h) => ({ header: h, ...matchHeaderWithLegend(h, legend) }));
+    const mapping = rows.headers.map((h, i) => {
+      const auto = matchHeaderWithLegend(h, legend);
+      const override = overrides[i];
+      if (override === undefined) return { header: h, ...auto };
+      return override === ''
+        ? { header: h, field: null, confidence: 0, method: 'none' as const }
+        : { header: h, field: override, confidence: 1, method: 'exact' as const };
+    });
     const drafts: Draft[] = rows.rows.map((r) => {
       const get = (f: FieldKey): number | null => {
         const i = mapping.findIndex((m) => m.field === f);
@@ -204,10 +225,30 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
       };
     });
     return { orientation, mapping, rows, drafts };
-  }, [text, model, sourceUrl, legendText, sizeColumn]);
+  }, [text, model, sourceUrl, legendText, sizeColumn, overrides]);
 
   const usable = parsed?.drafts.filter((d) => checkBounds(d).length === 0 && d.size !== '') ?? [];
   const rejected = (parsed?.drafts.length ?? 0) - usable.length;
+  /**
+   * Two columns claiming the same field. Basso labels both the chainstay and
+   * the front centre "Chain-Stay"; the first wins, which happens to be right
+   * here and would not be elsewhere. Worth saying out loud rather than leaving
+   * to luck.
+   */
+  const duplicates = parsed
+    ? [...new Set(
+        parsed.mapping
+          .map((m) => m.field)
+          .filter((f, i, all): f is FieldKey => f !== null && all.indexOf(f) !== i),
+      )]
+    : [];
+
+  // Naming the missing field beats "0 rows imported" with no reason.
+  const missing = parsed
+    ? (['stack', 'reach', 'headTubeAngle', 'seatTubeAngle'] as const).filter(
+        (f) => !parsed.mapping.some((m) => m.field === f),
+      )
+    : [];
 
   return (
     <div className="space-y-3 p-4">
@@ -253,17 +294,52 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
 
       {parsed && (
         <div className="space-y-2">
-          <p className="text-xs text-[var(--text-2)]">
-            Read as <b>{parsed.orientation === 'sizesAsColumns' ? 'sizes across the top' : parsed.orientation === 'sizesAsRows' ? 'sizes down the side' : 'ambiguous — check carefully'}</b>.
-            Columns recognised:{' '}
-            {parsed.mapping.map((m, i) => (
-              <span key={i} className={m.field ? '' : 'text-[var(--status-warning)]'}>
-                {m.header}
-                {m.field ? ` → ${m.field}${m.method === 'fuzzy' ? ' (guess)' : ''}` : ' → unrecognised'}
-                {i < parsed.mapping.length - 1 ? ' · ' : ''}
-              </span>
-            ))}
-          </p>
+          <div>
+            <p className="text-xs text-[var(--text-2)]">
+              Read as{' '}
+              <b>
+                {parsed.orientation === 'sizesAsColumns'
+                  ? 'sizes across the top'
+                  : parsed.orientation === 'sizesAsRows'
+                    ? 'sizes down the side'
+                    : 'ambiguous — check carefully'}
+              </b>
+              . Anything unrecognised can be assigned by hand — no tool knows every brand's wording.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {parsed.mapping.map((m, i) => (
+                <label
+                  key={i}
+                  className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] ${
+                    m.field ? 'border-[var(--border)]' : 'border-[var(--status-warning)]/50'
+                  }`}
+                >
+                  <span className="font-mono text-[var(--text-2)]">{m.header || `col ${i + 1}`}</span>
+                  <span className="text-[var(--text-3)]">→</span>
+                  <select
+                    value={overrides[i] ?? m.field ?? ''}
+                    onChange={(e) =>
+                      setOverrides({ ...overrides, [i]: e.target.value as FieldKey | '' })
+                    }
+                    className="rounded border border-[var(--border)] bg-[var(--background)] px-1 py-0.5 text-[11px]"
+                  >
+                    <option value="">ignore</option>
+                    {FIELD_OPTIONS.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {duplicates.length > 0 && (
+            <p className="rounded-md border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-3 py-2 text-xs">
+              <b>⚠ Two columns claim {duplicates.join(' and ')}.</b> The left-most one is used.
+              Check that it is the right one — some brands reuse a label for a different
+              measurement — and set the other to <i>ignore</i> if not.
+            </p>
+          )}
 
           <label className="block text-xs">
             <span className="text-[var(--text-2)]">
@@ -322,7 +398,10 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
           </button>
           {rejected > 0 && (
             <span className="ml-3 text-xs text-[var(--text-3)]">
-              {rejected} row{rejected === 1 ? '' : 's'} held back as implausible or incomplete.
+              {rejected} row{rejected === 1 ? '' : 's'} held back
+              {missing.length > 0
+                ? `: no column is mapped to ${missing.join(' or ')}. Assign it above.`
+                : ' as implausible or incomplete.'}
             </span>
           )}
           {model.trim() === '' && <span className="ml-3 text-xs text-[var(--text-3)]">Enter a model name first.</span>}

@@ -143,3 +143,31 @@ describe('legend parsing unlocks letter-column tables', () => {
     expect(matchHeaderWithLegend('Q7', legend).field).toBeNull();
   });
 });
+
+describe('real manufacturer vocabulary', () => {
+  // Basso calls the head tube angle "Steering Tube Angle". Token similarity
+  // scores that 0.67 against "head tube angle" - below the threshold - so
+  // without the synonym the single most important angle silently vanishes.
+  it('reads Basso column headers', () => {
+    expect(matchHeader('Steering Tube Angle (D)').field).toBe('headTubeAngle');
+    expect(matchHeader('Seat Tube Angle (C)').field).toBe('seatTubeAngle');
+    expect(matchHeader('Reach (R)').field).toBe('reach');
+    expect(matchHeader('Stack (S)').field).toBe('stack');
+    expect(matchHeader('Chain-Stay (E)').field).toBe('chainstay');
+    expect(matchHeader('Headtube (H)').field).toBe('headTubeLength');
+    expect(matchHeader('Wheelbase (WB)').field).toBe('wheelbase');
+    expect(matchHeader('Stand Over').field).toBe('standover');
+  });
+
+  it('treats hyphen, space and no space as the same word, with full confidence', () => {
+    for (const h of ['Chainstay', 'Chain stay', 'Chain-Stay']) {
+      expect(matchHeader(h)).toMatchObject({ field: 'chainstay', method: 'exact' });
+    }
+  });
+
+  it('parses values that carry their unit in the cell', () => {
+    expect(parseNumber('420mm')).toBe(420);
+    expect(parseNumber('75.5°')).toBe(75.5);
+    expect(parseNumber('1002mm')).toBe(1002);
+  });
+});

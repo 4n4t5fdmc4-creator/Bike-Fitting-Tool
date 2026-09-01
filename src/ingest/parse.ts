@@ -30,15 +30,15 @@ const SYNONYMS: Record<FieldKey, string[]> = {
   size: ['size', 'frame size', 'groesse', 'grosse', 'rahmenhohe', 'rahmengrosse', 'taglia'],
   stack: ['stack', 'stack height', 'uberhohung'],
   reach: ['reach', 'horizontal reach'],
-  headTubeAngle: ['head tube angle', 'headtube angle', 'head angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
+  headTubeAngle: ['head tube angle', 'headtube angle', 'head angle', 'steering tube angle', 'steering angle', 'steerer angle', 'fork angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
   seatTubeAngle: ['seat tube angle', 'seattube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
   headTubeLength: ['head tube', 'headtube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
   seatTubeLength: ['seat tube', 'seattube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
-  chainstay: ['chainstay', 'chainstay length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
+  chainstay: ['chainstay', 'chain stay', 'chainstay length', 'chain stay length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
   wheelbase: ['wheelbase', 'radstand', 'interasse'],
   bbDrop: ['bb drop', 'bottom bracket drop', 'tretlagerabsenkung', 'ribassamento'],
   forkRake: ['fork rake', 'fork offset', 'rake', 'offset', 'gabelvorbiegung'],
-  standover: ['standover', 'standover height', 'uberstandshohe', 'altezza cavallo'],
+  standover: ['standover', 'stand over', 'standover height', 'uberstandshohe', 'altezza cavallo'],
 };
 
 /** Lowercase, strip units, punctuation and diacritics, collapse whitespace. */
@@ -49,6 +49,7 @@ export function normaliseHeader(raw: string): string {
     .replace(/[̀-ͯ]/g, '')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\b(mm|cm|deg|degrees|grad|°)\b/g, ' ')
+    .replace(/[-–—/]/g, ' ')
     .replace(/[^a-z0-9 ]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -87,6 +88,16 @@ export function matchHeader(raw: string): HeaderMatch {
   for (const [field, list] of Object.entries(SYNONYMS) as [FieldKey, string[]][]) {
     if (list.includes(h)) return { field, confidence: 1, method: 'exact' };
   }
+  // Collapsing whitespace is not a guess: "Chain-Stay", "chain stay" and
+  // "chainstay" are one word written three ways. Doing this before the fuzzy
+  // stage keeps a certain match from being downgraded to a probable one.
+  const squashed = h.replace(/ /g, '');
+  for (const [field, list] of Object.entries(SYNONYMS) as [FieldKey, string[]][]) {
+    if (list.some((x) => x.replace(/ /g, '') === squashed)) {
+      return { field, confidence: 1, method: 'exact' };
+    }
+  }
+
   const abbr = ABBREVIATIONS[h];
   if (abbr) return { field: abbr, confidence: 0.95, method: 'abbreviation' };
 
