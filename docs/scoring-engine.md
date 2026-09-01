@@ -294,6 +294,12 @@ retains more adjustment headroom in each direction.
 
 ## 9. Explanation templates
 
+> **Expanded.** The full copy system — voice rules, the generated comparison
+> phrase grid, positive messages, warnings, handling and comfort tradeoffs, and
+> assembly rules — lives in [explanation-system.md](explanation-system.md). What
+> follows is the shape it is built on; that document supersedes this section
+> wherever they differ.
+
 Every explanation follows the same three-part shape, because a rider needs the
 same three things every time:
 
