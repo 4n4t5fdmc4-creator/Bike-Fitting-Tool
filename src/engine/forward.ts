@@ -89,3 +89,70 @@ export function gripPoint(frame: FrameCore, cockpit: ResolvedCockpit): BbPoint {
   const { dx, dy } = hoodOffset(cockpit);
   return { x: mm(bar.x + dx), y: mm(bar.y + dy) };
 }
+
+/** One axis pair of a hood-position contribution, in millimetres. */
+export interface HoodTerm {
+  readonly reach: number;
+  readonly stack: number;
+}
+
+/**
+ * The hood grip, broken into the four things that put it there. The four reach
+ * terms sum to grip reach and the four stack terms to grip stack, exactly - so
+ * an A/B difference can be read off as living in the frame, the stem, the
+ * steerer stack or the bar, and priced accordingly.
+ */
+export interface HoodDecomposition {
+  /** Head tube top: the frame's own reach and stack. */
+  readonly frame: HoodTerm;
+  /** `L·cos θ, L·sin θ` - the stem, at θ above horizontal. */
+  readonly stem: HoodTerm;
+  /** `−h·cos(hta), h·sin(hta)` - the rise up the steerer: spacers, top cap and half the stem clamp. */
+  readonly spacer: HoodTerm;
+  /** Bar reach and rise, plus the lever tip's own forward-and-up offset. */
+  readonly handlebar: HoodTerm;
+  /** Where the hands are. Equal, to the float, to {@link gripPoint}. */
+  readonly hood: HoodTerm;
+  /** Cumulative points for drawing, in the order the parts stack up the steerer. */
+  readonly points: {
+    readonly headTubeTop: BbPoint;
+    readonly steererTop: BbPoint;
+    readonly clamp: BbPoint;
+    readonly hood: BbPoint;
+  };
+}
+
+export function decomposeHood(frame: FrameCore, cockpit: ResolvedCockpit): HoodDecomposition {
+  const hta = toRad(frame.headTubeAngle);
+  const theta = toRad(stemAngleAboveHorizontal(frame, cockpit));
+  const u = steererRise(cockpit);
+  const bar = hoodOffset(cockpit);
+
+  const frameT: HoodTerm = { reach: frame.reach, stack: frame.stack };
+  const spacerT: HoodTerm = { reach: -u * Math.cos(hta), stack: u * Math.sin(hta) };
+  const stemT: HoodTerm = {
+    reach: cockpit.stemLength * Math.cos(theta),
+    stack: cockpit.stemLength * Math.sin(theta),
+  };
+  const handlebarT: HoodTerm = { reach: bar.dx, stack: bar.dy };
+
+  const headTubeTop: BbPoint = { x: mm(frameT.reach), y: mm(frameT.stack) };
+  const steererTop: BbPoint = {
+    x: mm(headTubeTop.x + spacerT.reach),
+    y: mm(headTubeTop.y + spacerT.stack),
+  };
+  const clamp: BbPoint = {
+    x: mm(steererTop.x + stemT.reach),
+    y: mm(steererTop.y + stemT.stack),
+  };
+  const hoodP: BbPoint = { x: mm(clamp.x + handlebarT.reach), y: mm(clamp.y + handlebarT.stack) };
+
+  return {
+    frame: frameT,
+    stem: stemT,
+    spacer: spacerT,
+    handlebar: handlebarT,
+    hood: { reach: hoodP.x, stack: hoodP.y },
+    points: { headTubeTop, steererTop, clamp, hood: hoodP },
+  };
+}
