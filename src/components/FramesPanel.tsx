@@ -34,8 +34,10 @@ export function FramesPanel() {
   const frames = useStudio((s) => s.frames);
   const addFrame = useStudio((s) => s.addFrame);
   const addFrames = useStudio((s) => s.addFrames);
+  const updateFrame = useStudio((s) => s.updateFrame);
   const removeFrame = useStudio((s) => s.removeFrame);
   const [tab, setTab] = useState<'list' | 'manual' | 'paste'>('list');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
     <section className="rounded-[10px] border border-[var(--border)] bg-[var(--panel)]">
@@ -56,14 +58,33 @@ export function FramesPanel() {
         </div>
       </div>
 
-      {tab === 'list' && <FrameList frames={frames} onRemove={removeFrame} />}
-      {tab === 'manual' && <ManualForm onAdd={(d) => { addFrame(d); setTab('list'); }} />}
+      {tab === 'list' && (
+        <FrameList
+          frames={frames}
+          onRemove={removeFrame}
+          onEdit={(id) => { setEditingId(id); setTab('manual'); }}
+        />
+      )}
+      {tab === 'manual' && (
+        <ManualForm
+          {...(editingId ? { initial: frames.find((f) => f.id === editingId) } : {})}
+          onSave={(d) => {
+            if (editingId) updateFrame(editingId, d);
+            else addFrame(d);
+            setEditingId(null);
+            setTab('list');
+          }}
+          onCancel={() => { setEditingId(null); setTab('list'); }}
+        />
+      )}
       {tab === 'paste' && <PasteImport onAdd={(ds) => { addFrames(ds); setTab('list'); }} />}
     </section>
   );
 }
 
-function FrameList({ frames, onRemove }: { frames: StoredFrame[]; onRemove: (id: string) => void }) {
+function FrameList({
+  frames, onRemove, onEdit,
+}: { frames: StoredFrame[]; onRemove: (id: string) => void; onEdit: (id: string) => void }) {
   if (frames.length === 0) {
     return (
       <p className="px-4 py-6 text-sm text-[var(--text-2)]">
@@ -104,8 +125,11 @@ function FrameList({ frames, onRemove }: { frames: StoredFrame[]; onRemove: (id:
                   </a>
                 ) : f.source}
               </td>
-              <td className="px-2 py-2 text-right">
-                <button onClick={() => onRemove(f.id)} className="text-xs text-[var(--text-3)] hover:text-[var(--status-critical)]">
+              <td className="px-2 py-2 text-right whitespace-nowrap">
+                <button onClick={() => onEdit(f.id)} className="text-xs text-[var(--acc)] hover:underline">
+                  edit
+                </button>
+                <button onClick={() => onRemove(f.id)} className="ml-3 text-xs text-[var(--text-3)] hover:text-[var(--status-critical)]">
                   remove
                 </button>
               </td>
@@ -123,8 +147,11 @@ const EMPTY: Draft = {
   source: 'manual', sourceUrl: '',
 };
 
-function ManualForm({ onAdd }: { onAdd: (d: Draft) => void }) {
-  const [d, setD] = useState<Draft>(EMPTY);
+function ManualForm({
+  initial, onSave, onCancel,
+}: { initial?: StoredFrame | undefined; onSave: (d: Draft) => void; onCancel: () => void }) {
+  const [d, setD] = useState<Draft>(initial ?? EMPTY);
+  const isEdit = initial !== undefined;
   const problems = checkBounds(d);
   const complete = d.model.trim() !== '' && d.size.trim() !== '';
 
@@ -146,15 +173,20 @@ function ManualForm({ onAdd }: { onAdd: (d: Draft) => void }) {
         </p>
       )}
 
-      <div className="sm:col-span-4">
+      <div className="sm:col-span-4 flex items-center gap-3">
         <button
           disabled={!complete}
-          onClick={() => { onAdd(d); setD(EMPTY); }}
+          onClick={() => { onSave(d); if (!isEdit) setD(EMPTY); }}
           className="rounded-md bg-[var(--acc)] px-4 py-2 text-sm font-semibold text-black disabled:opacity-40"
         >
-          Add frame
+          {isEdit ? 'Save changes' : 'Add frame'}
         </button>
-        {!complete && <span className="ml-3 text-xs text-[var(--text-3)]">Model and size are required.</span>}
+        {isEdit && (
+          <button onClick={onCancel} className="text-sm text-[var(--text-3)] hover:text-[var(--foreground)]">
+            Cancel
+          </button>
+        )}
+        {!complete && <span className="text-xs text-[var(--text-3)]">Model and size are required.</span>}
       </div>
     </div>
   );

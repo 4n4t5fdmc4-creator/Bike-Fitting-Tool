@@ -130,6 +130,7 @@ interface StudioState {
 
   addFrame: (f: Omit<StoredFrame, 'id' | 'addedAt'>) => void;
   addFrames: (fs: ReadonlyArray<Omit<StoredFrame, 'id' | 'addedAt'>>) => number;
+  updateFrame: (id: string, patch: Partial<Omit<StoredFrame, 'id' | 'addedAt'>>) => void;
   removeFrame: (id: string) => void;
 
   setStudio: (patch: Partial<Studio>) => void;
@@ -172,6 +173,9 @@ export const useStudio = create<StudioState>()(
         set((s) => ({ frames: [...s.frames, ...made] }));
         return made.length;
       },
+
+      updateFrame: (id, patch) =>
+        set((s) => ({ frames: s.frames.map((f) => (f.id === id ? { ...f, ...patch } : f)) })),
 
       removeFrame: (id) => set((s) => ({ frames: s.frames.filter((f) => f.id !== id) })),
 

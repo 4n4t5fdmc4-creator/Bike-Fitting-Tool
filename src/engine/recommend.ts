@@ -20,6 +20,8 @@ export interface CandidateFrame {
   readonly reach: Millimeters;
   readonly headTubeAngle: Degrees;
   readonly maxSpacerStack: Millimeters;
+  /** Not used by scoring - carried through only so the overlay can draw a real seat tube angle. */
+  readonly seatTubeAngle?: Degrees;
 }
 
 export interface ModelRecommendation {

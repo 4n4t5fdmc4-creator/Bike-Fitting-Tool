@@ -6,13 +6,15 @@ import { gripPoint } from '@/engine/forward';
 import { deriveTarget } from '@/engine/target';
 import { resolveCockpit } from '@/engine/assumptions';
 import { recommendByModel } from '@/engine/recommend';
+import { virtualFrameStackReach } from '@/engine/virtualFrame';
 import { FRAME_LIBRARY } from '@/data/frames';
 import { useStudio } from '@/state/studio';
-import { ClientPanel } from './ClientPanel';
-import { ReferenceBikePanel } from './ReferenceBikePanel';
-import { FramesPanel } from './FramesPanel';
-import { ModelCard } from './ModelCard';
-import { StatRow } from './StatRow';
+import { TabNav, type TabId } from './tabs/TabNav';
+import { ProfileTab } from './tabs/ProfileTab';
+import { BikesTab } from './tabs/BikesTab';
+import { OverlayTab } from './tabs/OverlayTab';
+import { CockpitTab } from './tabs/CockpitTab';
+import { MatrixTabWrapper } from './tabs/MatrixTabWrapper';
 
 export function Workspace() {
   // zustand/persist only reads localStorage on the client. Rendering stored
@@ -20,6 +22,8 @@ export function Workspace() {
   // so hold back one frame instead of fighting it.
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
+
+  const [tab, setTab] = useState<TabId>('profile');
 
   const clients = useStudio((s) => s.clients);
   const storedFrames = useStudio((s) => s.frames);
@@ -67,12 +71,14 @@ export function Workspace() {
             stack: mm(f.stack), reach: mm(f.reach),
             headTubeAngle: deg(f.headTubeAngle),
             maxSpacerStack: mm(f.maxSpacerStack),
+            seatTubeAngle: deg(f.seatTubeAngle),
           }))
         : FRAME_LIBRARY.map((f) => ({
             id: f.id, model: f.model, size: f.size,
             stack: f.stack, reach: f.reach,
             headTubeAngle: f.headTubeAngle,
             maxSpacerStack: f.maxSpacerStack,
+            seatTubeAngle: f.seatTubeAngle,
           })),
     [storedFrames],
   );
@@ -97,6 +103,23 @@ export function Workspace() {
       : undefined;
     return recommendByModel(catalogue, target.grip, base, neutral);
   }, [target, catalogue, client]);
+
+  const referenceLabel =
+    client?.targetMode === 'reference' && client.referenceBike?.label
+      ? client.referenceBike.label
+      : 'the target position';
+
+  // The matrix compares raw frame geometry to a starting point - a real
+  // reference bike's own stack/reach when there is one, otherwise a derived
+  // estimate. Never invented silently: the estimate is labelled everywhere
+  // it appears.
+  const matrixAnchor = useMemo(() => {
+    const ref = client?.targetMode === 'reference' ? client.referenceBike : null;
+    if (ref) return { stack: ref.stack, reach: ref.reach };
+    if (target) return virtualFrameStackReach(target.grip);
+    return { stack: 570, reach: 385 };
+  }, [client, target]);
+  const anchorIsEstimated = !(client?.targetMode === 'reference' && client.referenceBike);
 
   if (!ready) {
     return (
@@ -135,56 +158,44 @@ export function Workspace() {
     );
   }
 
-  const excellent = models.filter((m) => m.best.evaluation.verdict === 'excellentFit').length;
-  const referenceLabel =
-    client.targetMode === 'reference' && client.referenceBike?.label
-      ? client.referenceBike.label
-      : 'target position';
-
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
-      <ClientPanel client={client} />
-      <ReferenceBikePanel client={client} />
+    <>
+      <TabNav active={tab} onChange={setTab} />
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        {tab === 'profile' && <ProfileTab client={client} />}
 
-      {target && (
-        <StatRow
-          target={target}
-          fitting={excellent}
-          total={models.length}
-          measured={client.targetMode === 'reference' && client.referenceBike !== null}
-        />
-      )}
+        {tab === 'bikes' && (
+          <BikesTab
+            client={client}
+            target={target}
+            models={models}
+            usingExamples={usingExamples}
+            catalogueCount={catalogue.length}
+            referenceLabel={referenceLabel}
+          />
+        )}
 
-      <FramesPanel />
+        {tab === 'overlay' && (
+          <OverlayTab models={models} referenceBike={client.targetMode === 'reference' ? client.referenceBike : null} />
+        )}
 
-      <section>
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-[var(--text-3)]">
-            Recommended frames
-          </h2>
-          <span className="text-xs text-[var(--text-3)]">
-            {usingExamples
-              ? `${catalogue.length} verified sizes from Pinarello — add your own above`
-              : `${catalogue.length} sizes you entered`}
-          </span>
-        </div>
+        {tab === 'cockpit' && (
+          <CockpitTab
+            models={models}
+            target={target?.grip ?? null}
+            referenceBike={client.targetMode === 'reference' ? client.referenceBike : null}
+          />
+        )}
 
-        <p className="mt-2 text-sm text-[var(--text-2)]">
-          {excellent > 0 ? (
-            <><b className="text-[var(--foreground)]">{excellent}</b> of {models.length} models can be
-            built to this exact position.</>
-          ) : (
-            <><b className="text-[var(--foreground)]">None of these models reaches this position with
-            ordinary parts.</b> Closest first, each with what it would take.</>
-          )}
-        </p>
-
-        <ul className="mt-3 space-y-2">
-          {models.map((m) => (
-            <ModelCard key={m.model} rec={m} referenceLabel={referenceLabel} />
-          ))}
-        </ul>
-      </section>
-    </div>
+        {tab === 'matrix' && (
+          <MatrixTabWrapper
+            models={models}
+            anchor={matrixAnchor}
+            referenceLabel={referenceLabel}
+            anchorIsEstimated={anchorIsEstimated}
+          />
+        )}
+      </div>
+    </>
   );
 }
