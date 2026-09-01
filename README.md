@@ -10,8 +10,12 @@ position if I change one thing*.
 
 Specification phase. Implementation has not started.
 
-- **[Product specification](docs/product-spec.md)** — fit model, scoring logic,
-  personas, scope. Start here.
+- **[Product specification](docs/product-spec.md)** — fit model, personas, scope.
+  Start here.
+- **[Scoring engine](docs/scoring-engine.md)** — algorithm, penalty weights,
+  thresholds, explanation templates.
+- **[Application architecture](docs/app-architecture.md)** — folder structure,
+  components, state model, visualisation strategy, implementation plan.
 - **[Development workflow](docs/workflow.md)** — branches, environments, how a
   change reaches production.
 

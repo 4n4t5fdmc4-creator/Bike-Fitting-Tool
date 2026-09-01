@@ -1,0 +1,14 @@
+{
+  "name": "bike-fitting-tool",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Compare bike frames, geometries and adjust to individual personal needs.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
