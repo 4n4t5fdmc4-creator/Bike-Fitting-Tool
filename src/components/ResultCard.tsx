@@ -3,7 +3,21 @@
 import type { FitVerdict } from '@/domain/scoring';
 import type { FrameEvaluation } from '@/engine/score';
 import type { Explanation } from '@/engine/explain';
-import type { LibraryFrame } from '@/data/frames';
+import type { Degrees, Millimeters } from '@/domain/units';
+
+/**
+ * The minimum a card needs. Deliberately narrower than the library type so the
+ * same card renders an example frame and one the fitter entered.
+ */
+export interface RankableFrame {
+  readonly id: string;
+  readonly model: string;
+  readonly size: string;
+  readonly stack: Millimeters;
+  readonly reach: Millimeters;
+  readonly headTubeAngle: Degrees;
+  readonly maxSpacerStack: Millimeters;
+}
 
 /**
  * Status colours are reserved for verdicts and always carry an icon AND a text
@@ -22,7 +36,7 @@ export function ResultCard({
   evaluation,
   explanation,
 }: {
-  frame: LibraryFrame;
+  frame: RankableFrame;
   evaluation: FrameEvaluation;
   explanation: Explanation;
 }) {

@@ -24,12 +24,50 @@ export interface Measurements {
   flexibility: Flexibility;
 }
 
+/**
+ * A frame the fitter entered or imported. Provenance travels with the values:
+ * a number nobody can trace cannot be defended when a client disputes it.
+ */
+export interface StoredFrame {
+  id: string;
+  model: string;
+  size: string;
+  stack: number;
+  reach: number;
+  headTubeAngle: number;
+  seatTubeAngle: number;
+  maxSpacerStack: number;
+  source: 'manual' | 'pasted';
+  sourceUrl: string;
+  addedAt: string;
+}
+
+/**
+ * The client's current bike, used to MEASURE their position instead of
+ * estimating it from body measurements. Always the better target when it exists.
+ */
+export interface ReferenceBike {
+  label: string;
+  stack: number;
+  reach: number;
+  headTubeAngle: number;
+  stemLength: number;
+  stemAngle: number;
+  spacerHeight: number;
+  barReach: number;
+  barRise: number;
+}
+
 export interface Client {
   id: string;
   name: string;
   /** Free text: goals, complaints, previous fits. Never interpreted by the engine. */
   notes: string;
   measurements: Measurements;
+  /** Set when the client's own bike defines the target. */
+  referenceBike: ReferenceBike | null;
+  /** Which one the recommendations run against. */
+  targetMode: 'derived' | 'reference';
   createdAt: string;
   updatedAt: string;
 }
@@ -54,12 +92,25 @@ export interface ExportBundle {
   exportedAt: string;
   studio: Studio;
   clients: Client[];
+  frames?: StoredFrame[];
 }
+
+export const DEFAULT_REFERENCE: ReferenceBike = {
+  label: 'Current bike',
+  stack: 570, reach: 380, headTubeAngle: 72,
+  stemLength: 100, stemAngle: -6, spacerHeight: 20,
+  barReach: 80, barRise: 0,
+};
 
 interface StudioState {
   studio: Studio;
   clients: Client[];
+  frames: StoredFrame[];
   activeClientId: string | null;
+
+  addFrame: (f: Omit<StoredFrame, 'id' | 'addedAt'>) => void;
+  addFrames: (fs: ReadonlyArray<Omit<StoredFrame, 'id' | 'addedAt'>>) => number;
+  removeFrame: (id: string) => void;
 
   setStudio: (patch: Partial<Studio>) => void;
   addClient: (name: string) => string;
@@ -88,7 +139,21 @@ export const useStudio = create<StudioState>()(
     (set, get) => ({
       studio: { name: '', logo: null },
       clients: [],
+      frames: [],
       activeClientId: null,
+
+      addFrame: (f) =>
+        set((s) => ({
+          frames: [...s.frames, { ...f, id: newId(), addedAt: now() }],
+        })),
+
+      addFrames: (fs) => {
+        const made = fs.map((f) => ({ ...f, id: newId(), addedAt: now() }));
+        set((s) => ({ frames: [...s.frames, ...made] }));
+        return made.length;
+      },
+
+      removeFrame: (id) => set((s) => ({ frames: s.frames.filter((f) => f.id !== id) })),
 
       setStudio: (patch) => set((s) => ({ studio: { ...s.studio, ...patch } })),
 
@@ -99,6 +164,8 @@ export const useStudio = create<StudioState>()(
           name: name.trim() || 'Unnamed client',
           notes: '',
           measurements: { ...DEFAULT_MEASUREMENTS },
+          referenceBike: null,
+          targetMode: 'derived',
           createdAt: now(),
           updatedAt: now(),
         };
@@ -136,6 +203,7 @@ export const useStudio = create<StudioState>()(
         exportedAt: now(),
         studio: get().studio,
         clients: get().clients,
+        frames: get().frames,
       }),
 
       exportClient: (id) => {
@@ -161,8 +229,10 @@ export const useStudio = create<StudioState>()(
           id: newId(),
           updatedAt: now(),
         }));
+        const frames = (bundle.frames ?? []).map((f) => ({ ...f, id: newId() }));
         set((s) => ({
           clients: mode === 'replace' ? incoming : [...s.clients, ...incoming],
+          frames: mode === 'replace' ? frames : [...s.frames, ...frames],
           studio: bundle.studio?.name ? bundle.studio : s.studio,
           activeClientId: incoming[0]?.id ?? null,
         }));

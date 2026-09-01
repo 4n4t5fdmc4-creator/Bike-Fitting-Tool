@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { mm } from '@/domain/units';
+import { deg, mm } from '@/domain/units';
+import { gripPoint } from '@/engine/forward';
 import { deriveTarget } from '@/engine/target';
 import { resolveCockpit } from '@/engine/assumptions';
 import { evaluateFrame } from '@/engine/score';
@@ -9,6 +10,8 @@ import { explain } from '@/engine/explain';
 import { FRAME_LIBRARY } from '@/data/frames';
 import { useStudio } from '@/state/studio';
 import { ClientPanel } from './ClientPanel';
+import { ReferenceBikePanel } from './ReferenceBikePanel';
+import { FramesPanel } from './FramesPanel';
 import { ResultCard } from './ResultCard';
 import { StatRow } from './StatRow';
 
@@ -20,6 +23,7 @@ export function Workspace() {
   useEffect(() => setReady(true), []);
 
   const clients = useStudio((s) => s.clients);
+  const storedFrames = useStudio((s) => s.frames);
   const activeClientId = useStudio((s) => s.activeClientId);
   const addClient = useStudio((s) => s.addClient);
 
@@ -28,18 +32,58 @@ export function Workspace() {
   const target = useMemo(() => {
     if (!client) return null;
     const m = client.measurements;
-    return deriveTarget({
+    const derived = deriveTarget({
       height: mm(m.heightCm * 10),
       inseam: mm(m.inseamCm * 10),
       style: m.style,
       flexibility: m.flexibility,
     });
+
+    // A measured bike beats a formula every time. When one is on file, it
+    // replaces the estimated grip point and the uncertainty collapses to what
+    // the measurement itself carries.
+    const ref = client.referenceBike;
+    if (client.targetMode === 'reference' && ref) {
+      const grip = gripPoint(
+        { stack: mm(ref.stack), reach: mm(ref.reach), headTubeAngle: deg(ref.headTubeAngle) },
+        resolveCockpit({
+          stemLength: mm(ref.stemLength),
+          stemAngle: deg(ref.stemAngle),
+          spacerHeight: mm(ref.spacerHeight),
+          barReach: mm(ref.barReach),
+          barRise: mm(ref.barRise),
+        }),
+      );
+      return { ...derived, grip, uncertainty: mm(5) };
+    }
+    return derived;
   }, [client]);
+
+  // The fitter's own frames replace the examples as soon as there are any.
+  const catalogue = useMemo(
+    () =>
+      storedFrames.length > 0
+        ? storedFrames.map((f) => ({
+            id: f.id, model: f.model, size: f.size,
+            stack: mm(f.stack), reach: mm(f.reach),
+            headTubeAngle: deg(f.headTubeAngle),
+            maxSpacerStack: mm(f.maxSpacerStack),
+          }))
+        : FRAME_LIBRARY.map((f) => ({
+            id: f.id, model: f.model, size: f.size,
+            stack: f.stack, reach: f.reach,
+            headTubeAngle: f.headTubeAngle,
+            maxSpacerStack: f.maxSpacerStack,
+          })),
+    [storedFrames],
+  );
+
+  const usingExamples = storedFrames.length === 0;
 
   const results = useMemo(() => {
     if (!target) return [];
     const base = resolveCockpit();
-    return FRAME_LIBRARY.map((frame) => {
+    return catalogue.map((frame) => {
       const evaluation = evaluateFrame(frame, target.grip, base, undefined, frame.maxSpacerStack);
       return {
         frame,
@@ -47,7 +91,7 @@ export function Workspace() {
         explanation: explain(evaluation, `${frame.model} ${frame.size}`, frame.maxSpacerStack),
       };
     }).sort((a, b) => b.evaluation.composite - a.evaluation.composite);
-  }, [target]);
+  }, [target, catalogue]);
 
   if (!ready) {
     return (
@@ -93,10 +137,18 @@ export function Workspace() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <ClientPanel client={client} />
+      <ReferenceBikePanel client={client} />
 
       {target && (
-        <StatRow target={target} fitting={excellent} total={results.length} />
+        <StatRow
+          target={target}
+          fitting={excellent}
+          total={results.length}
+          measured={client.targetMode === 'reference' && client.referenceBike !== null}
+        />
       )}
+
+      <FramesPanel />
 
       <section>
         <div className="flex items-baseline justify-between">
@@ -104,7 +156,9 @@ export function Workspace() {
             Recommended frames
           </h2>
           <span className="text-xs text-[var(--text-3)]">
-            example geometry — real data import comes next
+            {usingExamples
+              ? 'example geometry — add your own frames above'
+              : `${catalogue.length} frames you entered`}
           </span>
         </div>
 

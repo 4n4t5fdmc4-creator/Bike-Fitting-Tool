@@ -1,0 +1,174 @@
+/**
+ * Parsing a pasted geometry table.
+ *
+ * Why paste and not fetch: a static site cannot read a manufacturer page. Tried
+ * on 2026-09-01 across eight brands - Pinarello returned 404, Wilier 403, Factor
+ * loads its table with JavaScript, and the aggregator sites return 403 to
+ * automated requests. Only Bianchi served a table in plain HTML, and its columns
+ * were unlabelled letters keyed to a drawing.
+ *
+ * So the rider copies the table and pastes it. Nothing here is ever trusted:
+ * every parsed value goes to a review screen before it is saved.
+ */
+
+/** Canonical fields we try to recognise. */
+export type FieldKey =
+  | 'size' | 'stack' | 'reach' | 'headTubeAngle' | 'seatTubeAngle'
+  | 'headTubeLength' | 'seatTubeLength' | 'chainstay' | 'wheelbase'
+  | 'bbDrop' | 'forkRake' | 'standover';
+
+/**
+ * Synonyms in the three languages the major brands publish in. Matching is a
+ * cascade - exact, then abbreviation, then token similarity - never pure fuzzy.
+ */
+const SYNONYMS: Record<FieldKey, string[]> = {
+  size: ['size', 'frame size', 'groesse', 'grosse', 'rahmenhohe', 'rahmengrosse', 'taglia'],
+  stack: ['stack', 'stack height', 'uberhohung'],
+  reach: ['reach', 'horizontal reach'],
+  headTubeAngle: ['head tube angle', 'head angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
+  seatTubeAngle: ['seat tube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
+  headTubeLength: ['head tube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
+  seatTubeLength: ['seat tube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
+  chainstay: ['chainstay', 'chainstay length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
+  wheelbase: ['wheelbase', 'radstand', 'interasse'],
+  bbDrop: ['bb drop', 'bottom bracket drop', 'tretlagerabsenkung', 'ribassamento'],
+  forkRake: ['fork rake', 'fork offset', 'rake', 'offset', 'gabelvorbiegung'],
+  standover: ['standover', 'standover height', 'uberstandshohe', 'altezza cavallo'],
+};
+
+/** Lowercase, strip units, punctuation and diacritics, collapse whitespace. */
+export function normaliseHeader(raw: string): string {
+  return raw
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b(mm|cm|deg|degrees|grad|°)\b/g, ' ')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const dice = (a: string, b: string): number => {
+  const ta = new Set(a.split(' ').filter(Boolean));
+  const tb = new Set(b.split(' ').filter(Boolean));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let shared = 0;
+  for (const t of ta) if (tb.has(t)) shared++;
+  return (2 * shared) / (ta.size + tb.size);
+};
+
+export interface HeaderMatch {
+  field: FieldKey | null;
+  confidence: number;
+  /** How the match was made, shown in review so a guess is visible as a guess. */
+  method: 'exact' | 'abbreviation' | 'fuzzy' | 'none';
+}
+
+/**
+ * Abbreviations live here and ONLY here. Keeping them out of the synonym lists
+ * is what lets `method` mean something: an abbreviation is a slightly weaker
+ * match than a spelled-out header, and the review screen shows that difference.
+ */
+const ABBREVIATIONS: Record<string, FieldKey> = {
+  hta: 'headTubeAngle', sta: 'seatTubeAngle', ht: 'headTubeLength',
+  st: 'seatTubeLength', cs: 'chainstay', wb: 'wheelbase', bb: 'bbDrop',
+};
+
+export function matchHeader(raw: string): HeaderMatch {
+  const h = normaliseHeader(raw);
+  if (!h) return { field: null, confidence: 0, method: 'none' };
+
+  for (const [field, list] of Object.entries(SYNONYMS) as [FieldKey, string[]][]) {
+    if (list.includes(h)) return { field, confidence: 1, method: 'exact' };
+  }
+  const abbr = ABBREVIATIONS[h];
+  if (abbr) return { field: abbr, confidence: 0.95, method: 'abbreviation' };
+
+  let best: { field: FieldKey; score: number } | null = null;
+  for (const [field, list] of Object.entries(SYNONYMS) as [FieldKey, string[]][]) {
+    for (const s of list) {
+      const score = dice(h, s);
+      if (!best || score > best.score) best = { field, score };
+    }
+  }
+  if (best && best.score >= 0.72) {
+    return { field: best.field, confidence: 0.7, method: 'fuzzy' };
+  }
+  return { field: null, confidence: 0, method: 'none' };
+}
+
+/**
+ * Parse one cell into a number.
+ *
+ * Handles the European decimal comma, thousands separators, ranges from
+ * adjustable dropouts, footnote markers and approximation signs. Returns null
+ * for anything absent - never zero, which would be a silent wrong answer.
+ */
+export function parseNumber(raw: string): number | null {
+  const s = raw.trim().replace(/[*†‡~≈]/g, '').trim();
+  if (!s || /^(n\/?a|-+|—|–)$/i.test(s)) return null;
+
+  const range = s.match(/^(\d+[.,]?\d*)\s*[-–—]\s*(\d+[.,]?\d*)$/);
+  if (range?.[1] && range[2]) {
+    const a = parseNumber(range[1]);
+    const b = parseNumber(range[2]);
+    return a !== null && b !== null ? (a + b) / 2 : null;
+  }
+
+  let t = s.replace(/\s/g, '');
+  // A comma followed by exactly three digits at the end is a thousands
+  // separator; otherwise it is a decimal comma.
+  if (/,\d{3}$/.test(t) && !/\.\d/.test(t)) t = t.replace(',', '');
+  else t = t.replace(',', '.');
+
+  const n = Number(t.replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+export interface RawTable {
+  headers: string[];
+  rows: string[][];
+}
+
+/** Split pasted text into a grid. Tabs win, then multi-space, then commas. */
+export function splitPaste(text: string): RawTable | null {
+  const lines = text.split(/\r?\n/).map((l) => l.trimEnd()).filter((l) => l.trim() !== '');
+  if (lines.length < 2) return null;
+
+  const first = lines[0] ?? '';
+  const delimiter = first.includes('\t') ? '\t' : first.includes(';') ? ';' : first.includes(',') ? ',' : /\s{2,}/;
+  const cells = (l: string): string[] =>
+    (typeof delimiter === 'string' ? l.split(delimiter) : l.split(delimiter)).map((c) => c.trim());
+
+  const grid = lines.map(cells);
+  const width = Math.max(...grid.map((r) => r.length));
+  if (width < 2) return null;
+
+  const headers = grid[0] ?? [];
+  return { headers, rows: grid.slice(1) };
+}
+
+const SIZE_TOKEN = /^(3[5-9]|4\d|5\d|6[0-5])(\.\d)?$|^(XXS|XS|S|M|ML|L|XL|XXL)$|^\d{3}$/i;
+
+/**
+ * Geometry tables come both ways: sizes across the top, or sizes down the side.
+ * Detected by looking for size-like tokens rather than assumed.
+ */
+export function detectOrientation(t: RawTable): 'sizesAsColumns' | 'sizesAsRows' | 'ambiguous' {
+  const headerHits = t.headers.filter((h) => SIZE_TOKEN.test(h.trim())).length;
+  const firstColHits = t.rows.filter((r) => SIZE_TOKEN.test((r[0] ?? '').trim())).length;
+  if (headerHits >= 2 && firstColHits < 2) return 'sizesAsColumns';
+  if (firstColHits >= 2 && headerHits < 2) return 'sizesAsRows';
+  return 'ambiguous';
+}
+
+/** Transpose so that every row is one size. */
+export function toSizeRows(t: RawTable): RawTable {
+  const grid = [t.headers, ...t.rows];
+  const width = Math.max(...grid.map((r) => r.length));
+  const out: string[][] = [];
+  for (let c = 0; c < width; c++) out.push(grid.map((r) => r[c] ?? ''));
+  const headers = out[0] ?? [];
+  return { headers, rows: out.slice(1) };
+}

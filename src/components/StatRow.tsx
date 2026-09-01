@@ -11,10 +11,13 @@ export function StatRow({
   target,
   fitting,
   total,
+  measured = false,
 }: {
   target: DerivedTarget;
   fitting: number;
   total: number;
+  /** True when the target came from a measured bike rather than a formula. */
+  measured?: boolean;
 }) {
   return (
     <section>
@@ -24,7 +27,7 @@ export function StatRow({
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <Stat
           label="Hoods ahead of BB" value={Math.round(target.grip.x)} unit="mm"
-          note={`±${Math.round(target.uncertainty)} mm band`}
+          note={measured ? 'measured, not estimated' : `±${Math.round(target.uncertainty)} mm band`}
         />
         <Stat
           label="Hoods above BB" value={Math.round(target.grip.y)} unit="mm"
@@ -45,8 +48,9 @@ export function StatRow({
         />
       </div>
       <p className="mt-2 text-xs text-[var(--text-3)]">
-        Derived from height and inseam with established rules of thumb — a starting band, not a bike
-        fit. Enter a reference bike instead to replace the estimate with a measurement.
+        {measured
+          ? 'Measured from the client\u2019s own bike. No formula involved — the only uncertainty left is in the numbers that were entered.'
+          : 'Derived from height and inseam with established rules of thumb — a starting band, not a bike fit. Measuring their current bike instead removes the estimate.'}
       </p>
     </section>
   );
