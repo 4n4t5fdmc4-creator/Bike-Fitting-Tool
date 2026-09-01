@@ -32,14 +32,14 @@ deploy workflow must build each branch with its own `BASE_PATH`.
 This replaces today's `rsync` step and is the single riskiest piece of the
 migration.
 
-### C3 — There is no Node toolchain on the developer machine
+### C3 — Local toolchain: Node 26.8.1, npm 11.19.0 *(resolved)*
 
-Every check runs in CI. This makes the round trip 60–90 seconds per iteration
-and rules out interactive scaffolding (`npx shadcn init` prompts). Mitigations:
-non-interactive flags, committed config, and a CI matrix that fails loudly.
+Node is installed locally, so typecheck, tests, lint and build all run before a
+push and CI is a second net rather than the only one. Interactive scaffolding
+(`npx shadcn init`) is available.
 
-> **Recommendation:** installing Node locally would cut iteration from ~90 s to
-> ~2 s. Everything below works without it, but slowly.
+CI still gates `main`: local verification is a convenience, not a substitute for
+a check that runs on the branch everyone sees.
 
 ### C4 — The domain layer stays framework-free
 
@@ -210,7 +210,7 @@ stops must show *why* — the frame maximum, the rail travel, the catalogue rang
 | Kind | Example | Home | Why |
 |------|---------|------|-----|
 | **Persistent** | Rider profile, garage, target | Zustand + `persist` to `localStorage` | Survives reloads; never leaves the device |
-| **Shareable** | Active tab, selected candidates, active row | URL search params | A link reproduces the view |
+| **Shareable** | Active tab, selected candidates, active row, reference frame | URL search params | A link reproduces the view. **Body measurements are never in the URL** — see §5.6 |
 | **Ephemeral** | Slider mid-drag | Local `useState`, committed on release | Keeps drags out of persistence |
 | **Derived** | Scores, contact points, attribution | Memoised selectors | **Never stored** |
 
@@ -252,7 +252,41 @@ index repaints survivors and silently breaks the link between a legend and a
 chart. The slot is assigned on add, released on remove, and never recycled while
 the session lives.
 
-### 5.6 Slider performance
+### 5.6 Rider profiles, not URL-encoded bodies
+
+Body measurements never go into a URL. Beyond the length problem, a URL is the
+single leakiest place to put personal data: it lands in browser history, in
+referrer headers, in shared screenshots, and in the clipboard of anyone who
+copies a link.
+
+Instead, **named rider profiles**:
+
+```ts
+interface StoredProfile {
+  id: string                 // short, non-guessable
+  label: string              // "Florian — road", "Florian — gravel"
+  rider: RiderProfile
+  target: IdealFitProfile
+  garage: CurrentBike[]
+  updatedAt: string
+}
+```
+
+- Stored in `localStorage` under a profile list; several may coexist, which also
+  covers the fitter case of switching between clients and the rider case of
+  separate road and gravel positions.
+- A profile switcher sits in `RiderSummaryBar`.
+- The URL carries only `?profile=<id>&tab=…&bikes=…&ref=…`. On a device that
+  does not hold that profile, the app opens with the comparison intact and an
+  explicit "this link references a profile you do not have — load one or enter
+  your measurements" state. It degrades to a frame comparison rather than
+  silently showing someone else's numbers.
+- **Export and import as a JSON file** is the sharing mechanism, and it is
+  deliberate and visible rather than implicit in a link. This also covers backup
+  and moving between devices without any server.
+- Nothing leaves the device unless the rider exports it.
+
+### 5.7 Slider performance
 
 A drag recomputes every candidate. The engine cost is negligible; re-rendering
 six SVG frames at 60 fps is not. Strategy:
@@ -313,9 +347,45 @@ The cap is therefore: **one reference frame plus two candidates.** Beyond that,
 the UI switches to **small multiples** — a facet grid of individual frames at a
 shared scale, each with the reference ghosted behind it.
 
+Verified with the palette validator rather than asserted. Slots 1–3 pass every
+all-pairs check in both modes (worst CVD ΔE 9.4 dark / 9.2 light). Adding slot 4
+fails hard: orange against yellow measures ΔE 4.8 under deuteranopia and 10.6
+with normal vision, below the 15 floor where full-colour readers can no longer
+separate a pair.
+
 This is the right product decision independently: six superimposed frames is an
-unreadable tangle, and the useful comparison — "my bike versus these two" — is
-exactly three.
+unreadable tangle, and the useful comparison is exactly three.
+
+### 6.4.1 The reference frame is a selection, not a fixed role
+
+"Reference" is a **role assigned to one of the loaded frames**, not a synonym for
+"the bike I own". Any frame in the workspace can be promoted to it, and the
+choice is a single control on the overlay.
+
+This matters because the comparison a rider wants changes mid-session:
+
+- *"How does this compare to my current bike?"* — reference is the owned bike.
+- *"How do these two candidates differ from each other?"* — reference is one candidate.
+- *"How far is everything from my ideal?"* — reference is the target position itself,
+  a synthetic frame with no tubes, contributing only contact points.
+
+Consequences for the model:
+
+- The reference is `state.ui.referenceFrameId`, defaulting to the owned bike when
+  one exists and to the highest-scoring candidate otherwise.
+- The reference is drawn dashed in secondary ink and **does not consume a colour
+  slot**, so three coloured candidates plus a reference is still within the
+  validated palette.
+- Delta attribution (§7.4 of the scoring engine) is computed *against the current
+  reference*, so promoting a different frame re-explains every delta from that
+  new baseline. This is the whole point: the attribution is only meaningful
+  relative to a stated baseline.
+
+**Light-mode contrast obligation.** In light mode the aqua slot measures 2.74:1
+against the chart surface — a validator WARN, which is not dismissable. The
+relief is mandatory and already specified: direct labels at each frame's head
+tube (§6.7) and a table view on every chart (§6.8). Those are requirements
+carrying a validator obligation, not polish.
 
 ### 6.5 Colour assignment
 
@@ -484,13 +554,13 @@ error states, Lighthouse pass.
 |---|------|------------|
 | R1 | Phase 0 migration breaks the working deployment | Do it on `develop` only; `/dev/` may break, `/` cannot. Merge to `main` only when `/dev/` is verified. |
 | R2 | `basePath` differs between environments; a hardcoded path breaks one of them | Never write literal paths. One `assetPath()` helper reading the build-time base. Add a CI check for literal `/Bike-Fitting-Tool` in source. |
-| R3 | No local Node makes iteration slow | Recommend installing Node. Until then, batch changes per CI round trip. |
-| R4 | shadcn's initialiser is interactive | Run with `--defaults --yes`; commit `components.json`; vendor components by copy if the CLI misbehaves. |
+| ~~R3~~ | ~~No local Node~~ | **Resolved** — Node 26.8.1 / npm 11.19.0 installed locally. |
+| R4 | shadcn's initialiser writes config that must match the repo layout | Run it locally, review the generated `components.json` and `globals.css` before committing. |
 | R5 | The bundle grows past what a phone on shop wifi tolerates | Lazy-load non-default tab panels; budget check in CI. Persona 3 decides in a garage. |
 | R6 | The three-frame overlay cap frustrates users who want to compare six | Small-multiples fallback is part of Phase 4, not a later addition. |
 
 | # | Open question | Needed by |
 |---|----------------|-----------|
 | Q6 | Is the three-frame cap acceptable as the primary comparison, with small multiples as the escape hatch? | Phase 4 design |
-| Q7 | Should the URL encode the full rider profile, or only a share token? Full encoding makes long links; body measurements in a URL is also a privacy question. | Phase 2 |
+| ~~Q7~~ | ~~URL encoding of the rider profile~~ | **Resolved** — named profiles, §5.7. |
 | Q8 | Vitest or node:test? Vitest is heavier but the ecosystem default. | Phase 1 |

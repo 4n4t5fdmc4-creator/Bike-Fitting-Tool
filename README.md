@@ -16,6 +16,8 @@ Specification phase. Implementation has not started.
   thresholds, explanation templates.
 - **[Application architecture](docs/app-architecture.md)** — folder structure,
   components, state model, visualisation strategy, implementation plan.
+- **[Ingestion pipeline](docs/ingestion-pipeline.md)** — manual entry, CSV, paste
+  and URL import; parsing, confidence and source attribution.
 - **[Development workflow](docs/workflow.md)** — branches, environments, how a
   change reaches production.
 
