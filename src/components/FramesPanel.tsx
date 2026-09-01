@@ -7,10 +7,13 @@ import {
   splitPaste, toSizeRows, type FieldKey,
 } from '@/ingest/parse';
 
-/** Plausibility gates, mirroring src/domain/validation.ts. */
+/** Plausibility gates, mirroring the hard bounds in src/domain/validation.ts. */
 const BOUNDS: Partial<Record<FieldKey, [number, number]>> = {
   stack: [400, 800], reach: [300, 500],
   headTubeAngle: [63, 80], seatTubeAngle: [65, 82],
+  headTubeLength: [60, 350], seatTubeLength: [300, 700],
+  chainstay: [360, 520], wheelbase: [880, 1300],
+  bbDrop: [40, 100], forkRake: [30, 70], standover: [550, 1000],
 };
 
 type Draft = Omit<StoredFrame, 'id' | 'addedAt'>;
@@ -18,9 +21,16 @@ type Draft = Omit<StoredFrame, 'id' | 'addedAt'>;
 /** Fields a column can be assigned to by hand. */
 const FIELD_OPTIONS: ReadonlyArray<FieldKey> = [
   'size', 'stack', 'reach', 'headTubeAngle', 'seatTubeAngle',
-  'headTubeLength', 'seatTubeLength', 'chainstay', 'wheelbase',
-  'bbDrop', 'forkRake', 'standover',
+  'headTubeLength', 'seatTubeLength', 'effectiveTopTube', 'chainstay',
+  'wheelbase', 'bbDrop', 'forkRake', 'trail', 'tyreMax', 'standover',
 ];
+
+/** Optional geometry the importer maps but that never blocks an import. */
+const SECONDARY_FIELDS = [
+  ['chainstay', 'CS'], ['headTubeLength', 'HT'], ['effectiveTopTube', 'TT'],
+  ['wheelbase', 'WB'], ['bbDrop', 'BB↓'], ['forkRake', 'rake'],
+  ['trail', 'trail'], ['tyreMax', 'tyre'], ['standover', 'stand'],
+] as const satisfies ReadonlyArray<readonly [keyof Draft, string]>;
 
 /**
  * Getting real geometry in.
@@ -166,6 +176,41 @@ function ManualForm({
       <Num label="Max spacers" unit="mm" v={d.maxSpacerStack} onChange={(v) => setD({ ...d, maxSpacerStack: v })} />
       <Text label="Source URL" v={d.sourceUrl} onChange={(v) => setD({ ...d, sourceUrl: v })} placeholder="https://…" />
 
+      <details className="sm:col-span-4">
+        <summary className="cursor-pointer text-xs text-[var(--text-3)] hover:text-[var(--foreground)]">
+          More geometry &amp; stock build (optional — leave blank if the table doesn&apos;t give it)
+        </summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <NumOpt label="Top tube" unit="mm eff." v={d.effectiveTopTube} onChange={(v) => setD({ ...d, effectiveTopTube: v })} />
+          <NumOpt label="Wheelbase" unit="mm" v={d.wheelbase} onChange={(v) => setD({ ...d, wheelbase: v })} />
+          <NumOpt label="BB drop" unit="mm" v={d.bbDrop} onChange={(v) => setD({ ...d, bbDrop: v })} />
+          <NumOpt label="Fork rake" unit="mm" v={d.forkRake} onChange={(v) => setD({ ...d, forkRake: v })} />
+          <NumOpt label="Trail" unit="mm" v={d.trail} onChange={(v) => setD({ ...d, trail: v })} />
+          <NumOpt label="Max tyre" unit="mm" v={d.tyreMax} onChange={(v) => setD({ ...d, tyreMax: v })} />
+          <NumOpt label="Standover" unit="mm" v={d.standover} onChange={(v) => setD({ ...d, standover: v })} />
+          <NumOpt label="Chainstay" unit="mm" v={d.chainstay} onChange={(v) => setD({ ...d, chainstay: v })} />
+          <NumOpt label="Head tube" unit="mm" v={d.headTubeLength} onChange={(v) => setD({ ...d, headTubeLength: v })} />
+          <NumOpt label="Stock stem" unit="mm" v={d.stockStem} onChange={(v) => setD({ ...d, stockStem: v })} />
+          <NumOpt label="Stock stem angle" unit="°" step={0.5} v={d.stockStemAngle} onChange={(v) => setD({ ...d, stockStemAngle: v })} />
+          <NumOpt label="Stock spacers" unit="mm" v={d.stockSpacers} onChange={(v) => setD({ ...d, stockSpacers: v })} />
+          <label className="block text-xs">
+            <span className="text-[var(--text-2)]">Cockpit</span>
+            <select
+              value={d.cockpitType ?? ''}
+              onChange={(e) =>
+                setD({ ...d, cockpitType: (e.target.value || undefined) as Draft['cockpitType'] })
+              }
+              className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
+            >
+              <option value="">unknown</option>
+              <option value="open">open</option>
+              <option value="semi-integrated">semi-integrated</option>
+              <option value="integrated">integrated</option>
+            </select>
+          </label>
+        </div>
+      </details>
+
       {problems.length > 0 && (
         <p className="rounded-md border border-[var(--status-warning)]/40 bg-[var(--status-warning)]/10 px-3 py-2 text-xs sm:col-span-4">
           <b>⚠ Outside the usual range:</b> {problems.join(' · ')}. Saving is still allowed — but
@@ -194,14 +239,22 @@ function ManualForm({
 
 function checkBounds(d: Draft): string[] {
   const out: string[] = [];
-  const check = (k: FieldKey, v: number, label: string) => {
+  const check = (k: FieldKey, v: number | undefined, label: string) => {
     const b = BOUNDS[k];
-    if (b && (v < b[0] || v > b[1])) out.push(`${label} ${v} (expected ${b[0]}–${b[1]})`);
+    if (b && v !== undefined && (v < b[0] || v > b[1])) {
+      out.push(`${label} ${v} (expected ${b[0]}–${b[1]})`);
+    }
   };
   check('stack', d.stack, 'stack');
   check('reach', d.reach, 'reach');
   check('headTubeAngle', d.headTubeAngle, 'head angle');
   check('seatTubeAngle', d.seatTubeAngle, 'seat angle');
+  check('headTubeLength', d.headTubeLength, 'head tube');
+  check('chainstay', d.chainstay, 'chainstay');
+  check('wheelbase', d.wheelbase, 'wheelbase');
+  check('bbDrop', d.bbDrop, 'BB drop');
+  check('forkRake', d.forkRake, 'fork rake');
+  check('standover', d.standover, 'standover');
   return out;
 }
 
@@ -257,13 +310,19 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
         const i = mapping.findIndex((m) => m.field === f);
         return i >= 0 ? parseNumber(r[i] ?? '') : null;
       };
+      const opt = (f: FieldKey): number | undefined => get(f) ?? undefined;
       const detected = mapping.findIndex((m) => m.field === 'size');
       const sizeIdx = sizeColumn ?? (detected >= 0 ? detected : 0);
       return {
         model, size: specList ? manualSize : (r[sizeIdx] ?? ''),
         stack: get('stack') ?? 0, reach: get('reach') ?? 0,
         headTubeAngle: get('headTubeAngle') ?? 0, seatTubeAngle: get('seatTubeAngle') ?? 0,
-        maxSpacerStack: 40, source: 'pasted' as const, sourceUrl,
+        maxSpacerStack: 40,
+        chainstay: opt('chainstay'), headTubeLength: opt('headTubeLength'),
+        effectiveTopTube: opt('effectiveTopTube'), wheelbase: opt('wheelbase'),
+        bbDrop: opt('bbDrop'), forkRake: opt('forkRake'), trail: opt('trail'),
+        tyreMax: opt('tyreMax'), standover: opt('standover'),
+        source: 'pasted' as const, sourceUrl,
       };
     });
     return { orientation, specList, mapping, rows, drafts };
@@ -271,6 +330,10 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
 
   const usable = parsed?.drafts.filter((d) => checkBounds(d).length === 0 && d.size !== '') ?? [];
   const rejected = (parsed?.drafts.length ?? 0) - usable.length;
+  /** Secondary columns to show in the review table — only those actually parsed. */
+  const presentSecondary = SECONDARY_FIELDS.filter(
+    ([key]) => parsed?.drafts.some((d) => d[key] !== undefined),
+  );
   /**
    * Two columns claiming the same field. Basso labels both the chainstay and
    * the front centre "Chain-Stay"; the first wins, which happens to be right
@@ -431,7 +494,11 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
               <thead className="text-left text-[var(--text-3)]">
                 <tr><th className="px-3 py-1.5">Size</th><th className="px-2 py-1.5 text-right">Stack</th>
                 <th className="px-2 py-1.5 text-right">Reach</th><th className="px-2 py-1.5 text-right">HTA</th>
-                <th className="px-2 py-1.5 text-right">STA</th><th className="px-2 py-1.5">Check</th></tr>
+                <th className="px-2 py-1.5 text-right">STA</th>
+                {presentSecondary.map(([, label]) => (
+                  <th key={label} className="px-2 py-1.5 text-right">{label}</th>
+                ))}
+                <th className="px-2 py-1.5">Check</th></tr>
               </thead>
               <tbody>
                 {parsed.drafts.map((d, i) => {
@@ -443,6 +510,9 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
                       <td className="px-2 py-1.5 text-right">{d.reach || '—'}</td>
                       <td className="px-2 py-1.5 text-right">{d.headTubeAngle || '—'}</td>
                       <td className="px-2 py-1.5 text-right">{d.seatTubeAngle || '—'}</td>
+                      {presentSecondary.map(([key, label]) => (
+                        <td key={label} className="px-2 py-1.5 text-right">{d[key] ?? '—'}</td>
+                      ))}
                       <td className={`px-2 py-1.5 ${p.length ? 'text-[var(--status-warning)]' : 'text-[var(--status-good)]'}`}>
                         {p.length ? `⚠ ${p[0]}` : '✓ plausible'}
                       </td>
@@ -493,6 +563,22 @@ function Num({ label, unit, v, onChange, step = 1 }: { label: string; unit: stri
       <span className="text-[var(--text-2)]">{label} <span className="text-[var(--text-3)]">{unit}</span></span>
       <input
         type="number" value={v} step={step} onChange={(e) => onChange(Number(e.target.value))}
+        className="tabular mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
+      />
+    </label>
+  );
+}
+
+/** Like Num, but an empty field means "not given" rather than zero. */
+function NumOpt({
+  label, unit, v, onChange, step = 1,
+}: { label: string; unit: string; v: number | undefined; onChange: (v: number | undefined) => void; step?: number }) {
+  return (
+    <label className="block text-xs">
+      <span className="text-[var(--text-2)]">{label} <span className="text-[var(--text-3)]">{unit}</span></span>
+      <input
+        type="number" value={v ?? ''} step={step}
+        onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
         className="tabular mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm"
       />
     </label>

@@ -37,6 +37,25 @@ export interface StoredFrame {
   headTubeAngle: number;
   seatTubeAngle: number;
   maxSpacerStack: number;
+  /**
+   * Everything below is optional. A pasted table routinely lacks half of it,
+   * and the app must never refuse a frame for a missing secondary number.
+   * Millimetres unless the name says otherwise.
+   */
+  chainstay?: number | undefined;
+  headTubeLength?: number | undefined;
+  effectiveTopTube?: number | undefined;
+  wheelbase?: number | undefined;
+  bbDrop?: number | undefined;
+  forkRake?: number | undefined;
+  tyreMax?: number | undefined;
+  standover?: number | undefined;
+  trail?: number | undefined;
+  /** The build the frame ships with, for the "cheapest change" comparison. */
+  stockStem?: number | undefined;
+  stockStemAngle?: number | undefined;
+  stockSpacers?: number | undefined;
+  cockpitType?: 'open' | 'semi-integrated' | 'integrated' | undefined;
   source: 'manual' | 'pasted';
   sourceUrl: string;
   addedAt: string;

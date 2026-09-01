@@ -170,6 +170,39 @@ describe('real manufacturer vocabulary', () => {
     expect(parseNumber('75.5°')).toBe(75.5);
     expect(parseNumber('1002mm')).toBe(1002);
   });
+
+  it('recognises the secondary geometry columns in three languages', () => {
+    expect(matchHeader('Top Tube').field).toBe('effectiveTopTube');
+    expect(matchHeader('Effective Top Tube (mm)').field).toBe('effectiveTopTube');
+    expect(matchHeader('Oberrohr').field).toBe('effectiveTopTube');
+    expect(matchHeader('Tubo orizzontale').field).toBe('effectiveTopTube');
+    expect(matchHeader('Wheelbase').field).toBe('wheelbase');
+    expect(matchHeader('Radstand').field).toBe('wheelbase');
+    expect(matchHeader('Interasse').field).toBe('wheelbase');
+    expect(matchHeader('BB Drop').field).toBe('bbDrop');
+    expect(matchHeader('Trail').field).toBe('trail');
+    expect(matchHeader('Max Tyre').field).toBe('tyreMax');
+    expect(matchHeader('Tyre Clearance').field).toBe('tyreMax');
+  });
+
+  it('resolves the Wilier letter columns through a legend', () => {
+    // The Rapida page prints no legend; the fitter supplies one from the drawing.
+    const legend = parseLegend('A: SEAT TUBE ANGLE, A1: HEAD TUBE ANGLE');
+    expect(matchHeaderWithLegend('A', legend).field).toBe('seatTubeAngle');
+    expect(matchHeaderWithLegend('A1', legend).field).toBe('headTubeAngle');
+  });
+
+  it('resolves the Bianchi letter columns through a legend', () => {
+    const legend = parseLegend(
+      'G: SEAT TUBE ANGLE, G1: HEAD TUBE ANGLE, I: CHAINSTAY, X: REACH, ' +
+      'Y: STACK, W: WHEELBASE, E: HEAD TUBE, H: FORK RAKE',
+    );
+    expect(matchHeaderWithLegend('Y', legend).field).toBe('stack');
+    expect(matchHeaderWithLegend('X', legend).field).toBe('reach');
+    expect(matchHeaderWithLegend('G1', legend).field).toBe('headTubeAngle');
+    expect(matchHeaderWithLegend('W', legend).field).toBe('wheelbase');
+    expect(matchHeaderWithLegend('H', legend).field).toBe('forkRake');
+  });
 });
 
 describe('vertical spec lists (one size at a time)', () => {

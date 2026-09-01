@@ -14,8 +14,8 @@
 /** Canonical fields we try to recognise. */
 export type FieldKey =
   | 'size' | 'stack' | 'reach' | 'headTubeAngle' | 'seatTubeAngle'
-  | 'headTubeLength' | 'seatTubeLength' | 'chainstay' | 'wheelbase'
-  | 'bbDrop' | 'forkRake' | 'standover';
+  | 'headTubeLength' | 'seatTubeLength' | 'effectiveTopTube' | 'chainstay'
+  | 'wheelbase' | 'bbDrop' | 'forkRake' | 'trail' | 'tyreMax' | 'standover';
 
 /**
  * Synonyms in the three languages the major brands publish in. Matching is a
@@ -34,10 +34,13 @@ const SYNONYMS: Record<FieldKey, string[]> = {
   seatTubeAngle: ['seat tube angle', 'seattube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
   headTubeLength: ['head tube', 'headtube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
   seatTubeLength: ['seat tube', 'seattube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
+  effectiveTopTube: ['top tube', 'top tube length', 'effective top tube', 'horizontal top tube', 'top tube horizontal', 'top tube effective', 'virtual top tube', 'oberrohr', 'oberrohr horizontal', 'tubo orizzontale', 'tubo orizzontale virtuale'],
   chainstay: ['chainstay', 'chain stay', 'chainstay length', 'chain stay length', 'rear centre length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
-  wheelbase: ['wheelbase', 'radstand', 'interasse'],
+  wheelbase: ['wheelbase', 'wheel base', 'radstand', 'interasse'],
   bbDrop: ['bb drop', 'bottom bracket drop', 'tretlagerabsenkung', 'ribassamento'],
   forkRake: ['fork rake', 'fork offset', 'fork rake offset', 'rake', 'offset', 'gabelvorbiegung'],
+  trail: ['trail', 'nachlauf', 'avancorsa'],
+  tyreMax: ['max tyre', 'max tire', 'maximum tyre', 'maximum tire', 'max tyre width', 'max tire width', 'max tyre clearance', 'max tire clearance', 'tyre clearance', 'tire clearance', 'maximale reifenbreite', 'reifenfreiheit'],
   standover: ['standover', 'stand over', 'standover height', 'bike standover height', 'uberstandshohe', 'altezza cavallo'],
 };
 
@@ -78,7 +81,8 @@ export interface HeaderMatch {
  */
 const ABBREVIATIONS: Record<string, FieldKey> = {
   hta: 'headTubeAngle', sta: 'seatTubeAngle', ht: 'headTubeLength',
-  st: 'seatTubeLength', cs: 'chainstay', wb: 'wheelbase', bb: 'bbDrop',
+  st: 'seatTubeLength', tt: 'effectiveTopTube', cs: 'chainstay',
+  wb: 'wheelbase', bb: 'bbDrop',
 };
 
 export function matchHeader(raw: string): HeaderMatch {
