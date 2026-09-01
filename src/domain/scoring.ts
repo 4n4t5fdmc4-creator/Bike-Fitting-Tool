@@ -147,6 +147,48 @@ export interface RequiredCockpit {
   readonly unclampedSpacerHeight: Millimeters;
 }
 
+// --- Result ----------------------------------------------------------------
+
+/**
+ * The result for one candidate. A discriminated union: `infeasible` carries no
+ * score, so no call site can accidentally rank it.
+ */
+export type FitResult =
+  | {
+      readonly kind: 'feasible';
+      readonly candidate: CandidateSetup;
+      readonly composite: Score;
+      readonly verdict: FitVerdict;
+      readonly flags: ReadonlyArray<FitFlag>;
+      /** Half-width of the confidence interval, propagated from input provenance. */
+      readonly confidence: Sigma;
+      readonly penalties: PenaltyBreakdown;
+      readonly cockpit: RequiredCockpit;
+      /** Residual at the grip point after clamping. Usually zero - see section 3
+       *  of docs/scoring-engine.md for why. */
+      readonly deviation: { readonly reach: Millimeters; readonly stack: Millimeters };
+      readonly warnings: ReadonlyArray<FitWarning>;
+    }
+  | {
+      readonly kind: 'infeasible';
+      readonly candidate: CandidateSetup;
+      readonly failures: ReadonlyArray<GateFailure>;
+      /** The closest the frame could get, for "how far off was it". */
+      readonly bestAttempt: RequiredCockpit;
+    };
+
+/** Non-blocking concerns. Shown, never silently folded into the score. */
+export interface FitWarning {
+  readonly code:
+    | 'toeOverlap'
+    | 'lowStandover'
+    | 'trailDeviation'
+    | 'railAtLimit'
+    | 'lowConfidenceInput';
+  readonly message: string;
+  readonly severity: 'info' | 'caution';
+}
+
 // --- Explanation -----------------------------------------------------------
 
 /**

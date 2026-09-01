@@ -38,6 +38,7 @@ and "your body works" is stated, not blurred.
 
 | # | Principle | Consequence |
 |---|-----------|-------------|
+| P0 | The primary axis is the grip point from the BB | Grip reach and grip stack — where the hands end up — are what a frame plus its cockpit produce and what the rider feels. The saddle is adjustable enough (four seatpost setbacks, ±25–30 mm of rail) to be a constraint rather than a scoring axis. |
 | P1 | Two layers: stack/reach to *shop*, contact points to *calculate* | Stack/reach are the shared vocabulary of every geometry table and the right filter for buying — they stay first-class in the UI. But they describe a *frame*, and a rider sits on a *saddle and a handlebar*, so every computation runs on BB-relative contact points. Neither replaces the other. |
 | P2 | Never output a number without its cause | Every delta is decomposed into the geometry properties that produced it. |
 | P3 | Adjustability is the product, not the score | A frame that needs a 140 mm stem "fits" arithmetically and fails in reality. Headroom is scored explicitly. |
@@ -471,6 +472,13 @@ Hard failures, each with a rider-readable reason:
 | G7 Standover | `standover > inseam - 20 mm` | "No standover clearance" |
 
 ### 7.3 Stage 3 — composite score
+
+> **Superseded.** The weighting below was written before the engine was
+> calibrated. Numerical testing showed that three cockpit degrees of freedom
+> against a two-dimensional target make the grip point reachable exactly on
+> almost every frame, so a position-dominant weighting assigns 95+ to everything
+> and discriminates nothing. The shipping model is headroom-dominant and lives in
+> [scoring-engine.md](scoring-engine.md). This section is kept for the record.
 
 ```
 Score = 0.40 * S_position
