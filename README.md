@@ -8,7 +8,11 @@ position if I change one thing*.
 
 ## Status
 
-Specification phase. Implementation has not started.
+Engine implemented and tested; no UI yet.
+
+- `src/domain/` — types only, zero imports.
+- `src/engine/` — the fit calculation: forward model, closed-form inverse,
+  scoring, saddle gate, delta attribution, explanation assembly. 61 tests.
 
 - **[Product specification](docs/product-spec.md)** — fit model, personas, scope.
   Start here.

@@ -188,7 +188,7 @@ export const DEFAULT_ASSUMPTIONS: FitAssumptions = {
   maxSpacerStack: sourced(mm(40), 'default', 10, 'Common carbon steerer limit where the manufacturer states none.'),
   stemClampHeight: sourced(mm(40), 'default', 6),
 
-  saddleWidthPointOffset: sourced(mm(65), 'default', 15, 'Saddle model unknown. Measure the 70 mm width point to remove this.'),
+  saddleWidthPointOffset: sourced(mm(40), 'default', 8, 'Saddle model unknown. Measure the 70 mm width point to remove this.'),
   saddleRailToTop: sourced(mm(35), 'default', 5),
 
   wheelRadius: sourced(mm(350), 'default', 10, '700c with a 28 mm tyre.'),

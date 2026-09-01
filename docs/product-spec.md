@@ -135,9 +135,17 @@ SY     = post_y + h_saddle          # rail-to-top-surface height, ~35 mm
 ```
 
 `w70` is a **per-saddle-model constant**, not a guess: it is measured once and
-stored in the saddle library. Typical values run 45–70 mm for short-nose models and
-70–95 mm for classic shapes. Where the model is unknown, the tool uses 65 mm and
-marks the result `estimated`.
+stored in the saddle library. It runs roughly **35–50 mm on almost every road
+saddle**, classic and short-nose alike — and that stability is the entire reason
+this is the reference point. The nose offset, by contrast, swings from ~115 mm on
+a short-nose saddle to ~140 mm on a classic one. Where the model is unknown, the
+tool uses 40 mm and marks the result `estimated`.
+
+> **Convention warning.** Setback measured to the 70 mm width point runs about
+> **145–220 mm** from the BB. The familiar nose-referenced figure is **50–95 mm**.
+> They describe the same saddle and differ by roughly 100 mm. Mixing them is the
+> single easiest way to produce a confidently wrong answer, so `SaddleTarget.setback`
+> is width-point-referenced everywhere, without exception.
 
 **Critical modelling point.** `STA` must be the **actual** seat tube angle, not the
 "effective" angle quoted in most geometry tables. Effective angles are stated at a
