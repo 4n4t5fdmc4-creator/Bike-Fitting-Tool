@@ -21,14 +21,19 @@ export type FieldKey =
  * Synonyms in the three languages the major brands publish in. Matching is a
  * cascade - exact, then abbreviation, then token similarity - never pure fuzzy.
  */
+/*
+ * Spelling variants matter more than they look. Pinarello publishes "HEADTUBE
+ * ANGLE" as one word; the two-word spelling alone silently failed to match it,
+ * and a legend entry that does not resolve is a column quietly dropped.
+ */
 const SYNONYMS: Record<FieldKey, string[]> = {
   size: ['size', 'frame size', 'groesse', 'grosse', 'rahmenhohe', 'rahmengrosse', 'taglia'],
   stack: ['stack', 'stack height', 'uberhohung'],
   reach: ['reach', 'horizontal reach'],
-  headTubeAngle: ['head tube angle', 'head angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
-  seatTubeAngle: ['seat tube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
-  headTubeLength: ['head tube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
-  seatTubeLength: ['seat tube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
+  headTubeAngle: ['head tube angle', 'headtube angle', 'head angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
+  seatTubeAngle: ['seat tube angle', 'seattube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
+  headTubeLength: ['head tube', 'headtube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
+  seatTubeLength: ['seat tube', 'seattube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
   chainstay: ['chainstay', 'chainstay length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
   wheelbase: ['wheelbase', 'radstand', 'interasse'],
   bbDrop: ['bb drop', 'bottom bracket drop', 'tretlagerabsenkung', 'ribassamento'],
@@ -124,6 +129,47 @@ export function parseNumber(raw: string): number | null {
 
   const n = Number(t.replace(/[^0-9.\-]/g, ''));
   return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Legend parsing.
+ *
+ * Several manufacturers publish geometry with single-letter columns keyed to a
+ * drawing - Pinarello uses CE, CC, L, A, B, P, T, D, R, G; Bianchi uses A, B1,
+ * C, D, E, F, G, G1. The letters are meaningless on their own, which is why
+ * `matchHeader` refuses to guess at them. But the same page usually prints a
+ * legend, and pasting that alongside the table makes the whole thing readable:
+ *
+ *   "A [°]: SEAT TUBE ANGLE, B [°]: HEADTUBE ANGLE, P: CHAINSTAY, ..."
+ *
+ * Each description is run through the ordinary matcher, so the legend inherits
+ * the same multi-language synonyms and the same refusal to guess.
+ */
+export function parseLegend(text: string): Record<string, FieldKey> {
+  const out: Record<string, FieldKey> = {};
+  // Split on commas or newlines, but only where a "KEY: description" follows.
+  for (const part of text.split(/[,\n;]/)) {
+    const m = part.match(/^\s*([A-Za-z]{1,3}\d?)\s*(?:\[[^\]]*\])?\s*:\s*(.+?)\s*$/);
+    if (!m?.[1] || !m[2]) continue;
+    const key = m[1].toLowerCase();
+    const matched = matchHeader(m[2]);
+    if (matched.field) out[key] = matched.field;
+  }
+  return out;
+}
+
+/** Resolve a header, consulting a legend before giving up on a letter column. */
+export function matchHeaderWithLegend(
+  raw: string,
+  legend: Record<string, FieldKey>,
+): HeaderMatch {
+  const direct = matchHeader(raw);
+  if (direct.field) return direct;
+
+  const key = raw.toLowerCase().replace(/\[[^\]]*\]/g, '').replace(/[^a-z0-9]/g, '').trim();
+  const viaLegend = legend[key];
+  if (viaLegend) return { field: viaLegend, confidence: 0.95, method: 'abbreviation' };
+  return direct;
 }
 
 export interface RawTable {

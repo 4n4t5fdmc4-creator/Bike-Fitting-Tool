@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useStudio, type StoredFrame } from '@/state/studio';
 import {
-  detectOrientation, matchHeader, parseNumber, splitPaste, toSizeRows, type FieldKey,
+  detectOrientation, matchHeaderWithLegend, parseLegend, parseNumber, splitPaste, toSizeRows,
+  type FieldKey,
 } from '@/ingest/parse';
 
 /** Plausibility gates, mirroring src/domain/validation.ts. */
@@ -168,13 +169,17 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
   const [text, setText] = useState('');
   const [model, setModel] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
+  const [legendText, setLegendText] = useState('');
 
   const parsed = useMemo(() => {
     const table = splitPaste(text);
     if (!table) return null;
     const orientation = detectOrientation(table);
     const rows = orientation === 'sizesAsColumns' ? toSizeRows(table) : table;
-    const mapping = rows.headers.map((h) => ({ header: h, ...matchHeader(h) }));
+    // Several brands label columns with letters keyed to a drawing. Pasting the
+    // legend alongside the table is what makes those readable.
+    const legend = parseLegend(legendText);
+    const mapping = rows.headers.map((h) => ({ header: h, ...matchHeaderWithLegend(h, legend) }));
     const drafts: Draft[] = rows.rows.map((r) => {
       const get = (f: FieldKey): number | null => {
         const i = mapping.findIndex((m) => m.field === f);
@@ -189,7 +194,7 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
       };
     });
     return { orientation, mapping, drafts };
-  }, [text, model, sourceUrl]);
+  }, [text, model, sourceUrl, legendText]);
 
   const usable = parsed?.drafts.filter((d) => checkBounds(d).length === 0 && d.size !== '') ?? [];
   const rejected = (parsed?.drafts.length ?? 0) - usable.length;
@@ -204,6 +209,16 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
         <Text label="Model name" v={model} onChange={setModel} placeholder="Specialized Tarmac SL8" />
         <Text label="Source URL" v={sourceUrl} onChange={setSourceUrl} placeholder="https://…" />
       </div>
+      <label className="block text-xs">
+        <span className="text-[var(--text-2)]">
+          Legend <span className="text-[var(--text-3)]">optional — needed when the columns are letters</span>
+        </span>
+        <textarea
+          value={legendText} onChange={(e) => setLegendText(e.target.value)} rows={2}
+          placeholder={'A[°]: SEAT TUBE ANGLE, B[°]: HEADTUBE ANGLE, P: CHAINSTAY, T: HEADTUBE, …'}
+          className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 font-mono text-xs"
+        />
+      </label>
       <textarea
         value={text} onChange={(e) => setText(e.target.value)} rows={6}
         placeholder={'Size\t49\t52\t54\nStack\t509\t522\t535\nReach\t366\t375\t380\n…'}

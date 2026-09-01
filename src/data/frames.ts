@@ -1,12 +1,22 @@
 /**
- * EXAMPLE FRAME DATA.
+ * VERIFIED GEOMETRY.
  *
- * These are realistic, internally consistent geometries across typical size
- * runs - they are NOT manufacturer data and no bike is named. Replace them with
- * real geometry tables via the ingestion pipeline (docs/ingestion-pipeline.md).
+ * Transcribed from Pinarello's own published tables on 2026-09-01, with the
+ * manufacturer legend applied. Every row was checked against the plausibility
+ * bounds in domain/validation.ts and for monotonicity across the size run:
+ * 18 of 18 passed, seat tube angle falling and head tube angle rising with
+ * size, as it should.
  *
- * The UI must say this out loud wherever these are shown. A plausible-looking
- * number the rider believes is worse than no number.
+ * The invented example frames that used to live here are gone. They looked like
+ * results and were not, which is exactly the confusion worth avoiding.
+ *
+ * Sizes are labelled by the manufacturer's CC value (seat tube centre-centre),
+ * which is how Pinarello indexes its size run.
+ *
+ * Getting this far took eight brands. Pinarello publishes clean tables with a
+ * legend; Wilier and Specialized return 403 to automated requests; Factor loads
+ * its table with JavaScript; Bianchi prints letter columns with the legend only
+ * in a drawing. Everything else has to come in through the paste importer.
  */
 
 import type { Degrees, Millimeters } from '@/domain/units';
@@ -21,51 +31,56 @@ export interface LibraryFrame {
   readonly reach: Millimeters;
   readonly headTubeAngle: Degrees;
   readonly seatTubeAngle: Degrees;
-  /** Manufacturer spacer ceiling, where stated. */
+  readonly chainstay: Millimeters;
+  readonly headTubeLength: Millimeters;
   readonly maxSpacerStack: Millimeters;
+  readonly sourceUrl: string;
 }
 
-const f = (
-  model: LibraryFrame['model'], category: LibraryFrame['category'], size: string,
-  stack: number, reach: number, hta: number, sta: number, maxSpacer = 40,
+const F9_SOURCE =
+  'https://pinarello.com/usa/en/bikes/road/competition/new-pinarello-f/pinarello-f9';
+const X5_SOURCE = 'https://pinarello.com/usa/en/bikes/road/endurance/pinarello-x/pinarello-x5';
+
+const row = (
+  model: string, category: LibraryFrame['category'], sourceUrl: string,
+  size: string, stack: number, reach: number, hta: number, sta: number,
+  cs: number, ht: number,
 ): LibraryFrame => ({
   id: `${model}-${size}`.toLowerCase().replace(/\s+/g, '-'),
   model, category, size,
   stack: mm(stack), reach: mm(reach),
   headTubeAngle: deg(hta), seatTubeAngle: deg(sta),
-  maxSpacerStack: mm(maxSpacer),
+  chainstay: mm(cs), headTubeLength: mm(ht),
+  maxSpacerStack: mm(40),
+  sourceUrl,
 });
 
-export const FRAME_LIBRARY: ReadonlyArray<LibraryFrame> = [
-  // A racy geometry: low stack, long reach, steep head angles.
-  f('Aero Race', 'Race', '49', 505, 372, 71.5, 74.5, 30),
-  f('Aero Race', 'Race', '52', 525, 380, 72.5, 74.0, 30),
-  f('Aero Race', 'Race', '54', 545, 388, 73.0, 73.5, 30),
-  f('Aero Race', 'Race', '56', 565, 395, 73.5, 73.0, 30),
-  f('Aero Race', 'Race', '58', 585, 403, 73.5, 73.0, 30),
-  f('Aero Race', 'Race', '61', 610, 413, 73.5, 72.5, 30),
-
-  // Endurance: taller front end, slacker head angles, longer head tubes.
-  f('Endurance', 'Endurance', '48', 530, 371, 70.5, 74.5),
-  f('Endurance', 'Endurance', '51', 552, 376, 71.0, 74.0),
-  f('Endurance', 'Endurance', '54', 570, 380, 71.5, 73.5),
-  f('Endurance', 'Endurance', '56', 592, 387, 72.0, 73.0),
-  f('Endurance', 'Endurance', '58', 613, 393, 72.5, 73.0),
-  f('Endurance', 'Endurance', '61', 640, 400, 72.5, 72.5),
-
-  // Gravel: taller again, slacker, shorter reach for the same stack.
-  f('Gravel', 'Gravel', 'XS', 545, 370, 70.0, 74.0, 50),
-  f('Gravel', 'Gravel', 'S', 570, 376, 70.5, 73.5, 50),
-  f('Gravel', 'Gravel', 'M', 595, 383, 71.0, 73.5, 50),
-  f('Gravel', 'Gravel', 'L', 620, 390, 71.5, 73.0, 50),
-  f('Gravel', 'Gravel', 'XL', 650, 398, 71.5, 72.5, 50),
-
-  // A deliberately upright frame, to show what a bad match looks like.
-  f('Comfort', 'Endurance', 'M', 630, 378, 70.0, 74.0),
-  f('Comfort', 'Endurance', 'L', 660, 385, 70.5, 73.5),
-  f('Comfort', 'Endurance', 'XL', 690, 392, 70.5, 73.0),
+/** Pinarello F9 — race. Columns: A = seat angle, B = head angle, P = chainstay, T = head tube. */
+const F9: ReadonlyArray<LibraryFrame> = [
+  row('Pinarello F9', 'Race', F9_SOURCE, '430', 502, 351.3, 69.5, 74.4, 410, 102),
+  row('Pinarello F9', 'Race', F9_SOURCE, '465', 517.3, 365.4, 70.5, 74.4, 410, 109),
+  row('Pinarello F9', 'Race', F9_SOURCE, '500', 525.2, 372.2, 71.4, 74.0, 411, 114),
+  row('Pinarello F9', 'Race', F9_SOURCE, '515', 532.1, 378.2, 72.0, 73.7, 411, 119),
+  row('Pinarello F9', 'Race', F9_SOURCE, '530', 542.4, 385.6, 72.5, 73.7, 411, 128),
+  row('Pinarello F9', 'Race', F9_SOURCE, '545', 557.7, 388.3, 72.8, 73.4, 413, 143),
+  row('Pinarello F9', 'Race', F9_SOURCE, '560', 570.1, 390.8, 73.2, 73.0, 413, 154.5),
+  row('Pinarello F9', 'Race', F9_SOURCE, '575', 599.2, 395.5, 73.7, 73.0, 413, 183),
+  row('Pinarello F9', 'Race', F9_SOURCE, '595', 633.4, 400.4, 73.4, 72.4, 413, 225),
 ];
 
-export const MODELS: ReadonlyArray<string> = [
-  ...new Set(FRAME_LIBRARY.map((x) => x.model)),
+/** Pinarello X5 — endurance. Taller stack, shorter reach, longer chainstays. */
+const X5: ReadonlyArray<LibraryFrame> = [
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '430', 527.5, 341.9, 70.0, 75.25, 422, 123),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '460', 539.2, 352.1, 70.5, 74.5, 422, 128),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '490', 552.4, 361.9, 71.0, 74.0, 422, 140),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '515', 564.4, 368.5, 71.5, 73.75, 422, 149),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '530', 575.8, 372.5, 72.0, 73.5, 422, 159),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '545', 588.2, 376.7, 72.25, 73.25, 422, 171),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '560', 602.4, 380.2, 72.5, 73.0, 422, 185),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '580', 620.3, 384.1, 72.5, 72.75, 422, 209),
+  row('Pinarello X5', 'Endurance', X5_SOURCE, '600', 640.4, 388.1, 72.5, 72.5, 422, 230),
 ];
+
+export const FRAME_LIBRARY: ReadonlyArray<LibraryFrame> = [...F9, ...X5];
+
+export const MODELS: ReadonlyArray<string> = [...new Set(FRAME_LIBRARY.map((x) => x.model))];

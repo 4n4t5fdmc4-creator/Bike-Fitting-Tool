@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  detectOrientation, matchHeader, normaliseHeader, parseNumber, splitPaste, toSizeRows,
+  detectOrientation, matchHeader, matchHeaderWithLegend, normaliseHeader, parseLegend,
+  parseNumber, splitPaste, toSizeRows,
 } from '../parse';
 
 describe('header normalisation', () => {
@@ -103,5 +104,42 @@ describe('orientation detection', () => {
     const t = toSizeRows(splitPaste('Size\t49\t52\nStack\t509\t522\nReach\t366\t375')!);
     expect(t.headers).toEqual(['Size', 'Stack', 'Reach']);
     expect(t.rows).toEqual([['49', '509', '366'], ['52', '522', '375']]);
+  });
+});
+
+describe('legend parsing unlocks letter-column tables', () => {
+  // Verbatim from pinarello.com — the exact case that made the header matcher
+  // give up, and the exact thing that makes it solvable.
+  const PINARELLO_LEGEND =
+    'CE: SEAT TUBE CENTER - END, CC: SEAT TUBE CENTER - CENTER, L: TOP TUBE CENTER - CENTER, ' +
+    'A[°]: SEAT TUBE ANGLE, B[°]: HEADTUBE ANGLE, P: CHAINSTAY, T: HEADTUBE, D: BB DROP, ' +
+    'R: FORK RAKE , G: FORK HEIGHT, REACH, STACK';
+
+  it('maps the letters that carry meaning', () => {
+    const legend = parseLegend(PINARELLO_LEGEND);
+    expect(legend['a']).toBe('seatTubeAngle');
+    expect(legend['b']).toBe('headTubeAngle');
+    expect(legend['p']).toBe('chainstay');
+    expect(legend['t']).toBe('headTubeLength');
+    expect(legend['d']).toBe('bbDrop');
+    expect(legend['r']).toBe('forkRake');
+  });
+
+  it('leaves letters it cannot map alone rather than forcing a match', () => {
+    const legend = parseLegend(PINARELLO_LEGEND);
+    // "Fork height" is not a field this model uses; inventing a home for it
+    // would be worse than dropping it.
+    expect(legend['g']).toBeUndefined();
+  });
+
+  it('resolves a letter header only once the legend is supplied', () => {
+    const legend = parseLegend(PINARELLO_LEGEND);
+    expect(matchHeader('B [°]').field).toBeNull();
+    expect(matchHeaderWithLegend('B [°]', legend).field).toBe('headTubeAngle');
+  });
+
+  it('still refuses unknown letters even with a legend present', () => {
+    const legend = parseLegend(PINARELLO_LEGEND);
+    expect(matchHeaderWithLegend('Q7', legend).field).toBeNull();
   });
 });
