@@ -24,6 +24,8 @@ Engine implemented and tested; no UI yet.
   comparison phrases, warnings, tradeoffs.
 - **[Ingestion pipeline](docs/ingestion-pipeline.md)** — manual entry, CSV, paste
   and URL import; parsing, confidence and source attribution.
+- **[Build prompts](docs/build-prompts.md)** — the gap between the current app
+  and the reference tool, as a numbered work queue.
 - **[Development workflow](docs/workflow.md)** — branches, environments, how a
   change reaches production.
 
