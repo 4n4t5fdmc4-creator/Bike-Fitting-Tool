@@ -35,8 +35,8 @@ describe('calibration run', () => {
     name: string; f: FrameCore; reqSpacers: number; reqStem: number;
     score: number; verdict: string;
   }> = [
-    { name: 'Race 52', f: frame(525, 380, 72.5), reqSpacers: 28, reqStem: 127, score: 65.6, verdict: 'borderline' },
-    { name: 'Race 54', f: frame(545, 388, 73.0), reqSpacers: 26, reqStem: 112, score: 93.3, verdict: 'excellentFit' },
+    { name: 'Race 52', f: frame(525, 380, 72.5), reqSpacers: 15, reqStem: 129, score: 69.4, verdict: 'worksWithModerateAdjustment' },
+    { name: 'Race 54', f: frame(545, 388, 73.0), reqSpacers: 14, reqStem: 113, score: 91.2, verdict: 'excellentFit' },
     { name: 'Race 56', f: REFERENCE, reqSpacers: 20, reqStem: 100, score: 98.5, verdict: 'excellentFit' },
     { name: 'Race 58', f: frame(585, 403, 73.5), reqSpacers: 11, reqStem: 88, score: 95.3, verdict: 'excellentFit' },
     { name: 'Race 60', f: frame(605, 412, 73.5), reqSpacers: -2, reqStem: 75, score: 71.4, verdict: 'worksWithModerateAdjustment' },

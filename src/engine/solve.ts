@@ -14,9 +14,20 @@ import { deg, mm, toRad } from '../domain/units';
 import type { FrameCore, ResolvedCockpit } from './forward';
 import { hoodOffset } from './forward';
 
-/** Stem angles a shop actually stocks. */
+/**
+ * Stem angles a shop actually stocks.
+ *
+ * 0 degrees is deliberately absent. It exists, but it is rare on drop-bar bikes:
+ * the catalogues are dominated by +-6 (often labelled 7 or 8) and +-17, with
+ * +-12 from a few brands. Recommending an angle a rider cannot easily buy is
+ * worse than recommending the next one along, and the solver will happily find
+ * an equivalent build at a stocked angle.
+ *
+ * A reference bike can still be entered with any angle - this list constrains
+ * what is RECOMMENDED, not what can be described.
+ */
 export const CATALOGUE_STEM_ANGLES: ReadonlyArray<Degrees> = [
-  deg(-17), deg(-12), deg(-6), deg(0), deg(6), deg(17),
+  deg(-17), deg(-12), deg(-8), deg(-6), deg(6), deg(8), deg(12), deg(17),
 ];
 
 export interface CockpitSolution {

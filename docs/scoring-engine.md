@@ -438,8 +438,8 @@ exactly that.
 
 | Frame | Stack | Reach | HTA | Required stem | Required spacers | Score | Verdict |
 |-------|-------|-------|-----|---------------|------------------|-------|---------|
-| Race 52 | 525 | 380 | 72.5 | 127 mm | 28 mm | 65.6 | borderline |
-| Race 54 | 545 | 388 | 73.0 | 112 mm | 26 mm | 93.3 | excellent |
+| Race 52 | 525 | 380 | 72.5 | 129 mm | 15 mm | 69.4 | moderate |
+| Race 54 | 545 | 388 | 73.0 | 113 mm | 14 mm | 91.2 | excellent |
 | **Race 56** | 565 | 395 | 73.5 | **100 mm** | **20 mm** | **98.5** | **excellent** |
 | Race 58 | 585 | 403 | 73.5 | 88 mm | 11 mm | 95.3 | excellent |
 | Race 60 | 605 | 412 | 73.5 | 75 mm | −2 mm | 71.4 | moderate · no room to lower |
@@ -448,6 +448,13 @@ exactly that.
 | Gravel M | 595 | 383 | 71.0 | 107 mm | 4 mm | 89.6 | excellent |
 | Allroad L | 610 | 392 | 71.5 | 93 mm | −10 mm | 59.7 | borderline · too relaxed |
 | Comfort XL | 660 | 385 | 70.5 | 83 mm | −64 mm | 0 | not recommended · too relaxed |
+
+> **Regenerated 2026-09-01** after 0° was removed from the stem catalogue and
+> ±8° and ±12° added. Rejecting a 0° recommendation cost nothing — the solver
+> finds an equivalent build at a stocked angle — and the extra angles lift
+> Race 52 from borderline to workable. The calibration test asserts these
+> figures, so a change to the catalogue or the weights fails the build and
+> forces this table to be rebuilt rather than left stale. That is the point.
 
 The curve behaves as a fitter would: a clear peak at the frame the target came
 from, workable neighbours at 54 and 58, both edges falling to borderline for the

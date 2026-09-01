@@ -84,11 +84,18 @@ export function Workspace() {
   const models = useMemo(() => {
     if (!target) return [];
     const ref = client?.targetMode === 'reference' ? client.referenceBike : null;
+    // The candidate must be evaluated with the SAME handlebar the target was
+    // measured on. Carrying a fit across bikes means carrying the bar across
+    // too - assuming a generic bar here made the client's own frame fail to
+    // reproduce his own build.
+    const base = ref
+      ? resolveCockpit({ barReach: mm(ref.barReach), barRise: mm(ref.barRise) })
+      : resolveCockpit();
     // A fitted client's own cockpit is the neutral one - see CockpitNeutral.
     const neutral = ref
-      ? { stemLength: ref.stemLength, spacerHeight: ref.spacerHeight }
+      ? { stemLength: ref.stemLength, spacerHeight: ref.spacerHeight, stemAngle: ref.stemAngle }
       : undefined;
-    return recommendByModel(catalogue, target.grip, resolveCockpit(), neutral);
+    return recommendByModel(catalogue, target.grip, base, neutral);
   }, [target, catalogue, client]);
 
   if (!ready) {

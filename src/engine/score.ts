@@ -31,6 +31,12 @@ import { DEFAULT_LIMITS, clamp, snapStem } from './assumptions';
 export interface CockpitNeutral {
   readonly stemLength: number;
   readonly spacerHeight: number;
+  /**
+   * The angle the client already rides. Used only as a tie-break, never to move
+   * the score: when two builds are within a point of each other, the one using
+   * a stem they already own is the better advice.
+   */
+  readonly stemAngle?: number;
 }
 
 export interface FrameEvaluation {
@@ -164,5 +170,17 @@ export function evaluateFrame(
   // return type honest rather than asserting.
   const first = evaluations[0];
   if (first === undefined) throw new Error('no cockpit solution produced');
-  return evaluations.reduce((best, e) => (e.composite > best.composite ? e : best), first);
+  return evaluations.reduce((best, e) => {
+    const gap = e.composite - best.composite;
+    if (gap > 1) return e;
+    if (gap < -1) return best;
+    // Within a point, prefer the stem angle the client already has.
+    if (neutral?.stemAngle !== undefined) {
+      const eMatch = e.required.stemAngle === neutral.stemAngle;
+      const bMatch = best.required.stemAngle === neutral.stemAngle;
+      if (eMatch && !bMatch) return e;
+      if (bMatch && !eMatch) return best;
+    }
+    return e.composite > best.composite ? e : best;
+  }, first);
 }
