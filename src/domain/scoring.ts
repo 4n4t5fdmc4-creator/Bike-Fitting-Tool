@@ -7,7 +7,7 @@
  * way to guarantee that is to make the two states different shapes.
  */
 
-import type { Millimeters, Score, Sigma } from './units.js';
+import type { Degrees, Millimeters, Score, Sigma } from './units.js';
 import type { CandidateSetup } from './fit.js';
 
 // --- Feasibility -----------------------------------------------------------
@@ -33,72 +33,118 @@ export interface GateFailure {
   readonly structural: boolean;
 }
 
-// --- Sub-scores ------------------------------------------------------------
-
-export interface SubScores {
-  /** Closeness of the achieved position to target. Weight 0.40. */
-  readonly position: Score;
-  /** Remaining adjustment range around the solution. Weight 0.25. */
-  readonly headroom: Score;
-  /** Standover, toe overlap, handling deltas. Weight 0.20. */
-  readonly constraints: Score;
-  /** How ordinary the required parts are. Weight 0.15. */
-  readonly components: Score;
-}
-
-export const SUB_SCORE_WEIGHTS = {
-  position: 0.4,
-  headroom: 0.25,
-  constraints: 0.2,
-  components: 0.15,
-} as const satisfies Record<keyof SubScores, number>;
-
-/** Tolerance bands, in rider language. */
-export type FitBand =
-  /** Within 5 mm reach / 8 mm drop. Indistinguishable. */
-  | 'A'
-  /** Within 12 / 18. Adapts within a ride. */
-  | 'B'
-  /** Within 25 / 35. Noticeably different. */
-  | 'C'
-  /** Beyond that. A different bike. */
-  | 'D';
+// --- Verdict and flags -----------------------------------------------------
 
 /**
- * The result for one candidate. A discriminated union: `infeasible` carries no
- * score, so no call site can accidentally rank it.
+ * The single overall answer. Thresholds live in `SCORE_THRESHOLDS`.
+ *
+ * Deliberately separate from `FitFlag`: the verdict says *how well*, the flags
+ * say *what is wrong*. "borderline, too aggressive, requires too many spacers"
+ * is three facts, and collapsing them into one enum discards two of them.
  */
-export type FitResult =
-  | {
-      readonly kind: 'feasible';
-      readonly candidate: CandidateSetup;
-      readonly composite: Score;
-      /** Half-width of the confidence interval, propagated from input provenance. */
-      readonly confidence: Sigma;
-      readonly subScores: SubScores;
-      readonly band: FitBand;
-      readonly deviation: { readonly reach: Millimeters; readonly drop: Millimeters };
-      readonly warnings: ReadonlyArray<FitWarning>;
-    }
-  | {
-      readonly kind: 'infeasible';
-      readonly candidate: CandidateSetup;
-      readonly failures: ReadonlyArray<GateFailure>;
-    };
+export type FitVerdict =
+  | 'excellentFit'
+  | 'worksWithModerateAdjustment'
+  | 'borderline'
+  | 'notRecommended';
 
-/** Non-blocking concerns. Shown, never silently folded into the score. */
-export interface FitWarning {
-  readonly code:
-    | 'toeOverlap'
-    | 'lowStandover'
-    | 'trailDeviation'
-    | 'stemAtLimit'
-    | 'spacersAtLimit'
-    | 'railAtLimit'
-    | 'lowConfidenceInput'
-    | 'effectiveSeatAngleAssumed';
-  readonly message: string;
-  readonly severity: 'info' | 'caution';
+export const SCORE_THRESHOLDS = {
+  excellentFit: 85,
+  worksWithModerateAdjustment: 68,
+  borderline: 50,
+} as const;
+
+/**
+ * Diagnostics, evaluated on the UNCLAMPED solve - the question is what the
+ * frame demands, not what survived being clamped to buildable parts.
+ */
+export type FitFlag =
+  /** Frame is built lower than the rider wants to ride. */
+  | 'tooAggressive'
+  /** Front end too tall; the rider cannot get low enough. */
+  | 'tooRelaxed'
+  /** Required spacer stack exceeds the frame limit. Structural, not preference. */
+  | 'requiresTooManySpacers'
+  /** Required stem below 70 mm or above 130 mm. */
+  | 'requiresExtremeStem'
+  /** Solution sits at zero spacers - fits now, cannot go lower later. */
+  | 'noRoomToLower'
+  /** Solution sits at the longest catalogue stem. */
+  | 'noRoomToLengthen'
+  /** Stem must be flipped positive to reach the target. */
+  | 'flippedStemRequired'
+  /** Handlebar model unknown; defaults used, +-10 mm extra uncertainty. */
+  | 'assumedBarGeometry'
+  /** Only an effective seat tube angle was available. */
+  | 'effectiveSeatAngleAssumed';
+
+// --- Penalties -------------------------------------------------------------
+
+/**
+ * Every candidate starts at 100 and loses points. The breakdown is retained in
+ * full because the explanation is generated from it - a score without its terms
+ * cannot be defended to the rider.
+ */
+export interface PenaltyBreakdown {
+  /** Frame physically cannot reach the target. Only non-zero when clamped. */
+  readonly unreachableReach: number;
+  readonly unreachableStack: number;
+  /** Continuous pull towards a neutral cockpit. Always active. */
+  readonly stemCentre: number;
+  readonly spacerCentre: number;
+  /** Escalating, once outside what a shop stocks comfortably. */
+  readonly stemBand: number;
+  readonly spacerBand: number;
+  /** Flat configuration penalties. */
+  readonly flippedStem: number;
+  readonly extremeAngle: number;
+  readonly railNearLimit: number;
+  readonly nonStockSeatpost: number;
+  readonly integratedCockpit: number;
+  /** Flat safety and handling penalties. */
+  readonly toeOverlap: number;
+  readonly lowStandover: number;
+  readonly trailDeviation: number;
+}
+
+/** Weights, in points per millimetre unless the term is flat. */
+export const PENALTY_WEIGHTS = {
+  unreachableReachPerMm: 3.0,
+  unreachableStackPerMm: 2.0,
+  unreachableDeadbandMm: 3,
+
+  stemCentrePerMm: 0.35,
+  stemNeutralMm: 100,
+  spacerCentrePerMm: 0.3,
+  spacerNeutralMm: 15,
+
+  stemBandPerMm: 1.0,
+  stemBandMinMm: 85,
+  stemBandMaxMm: 115,
+  spacerBandPerMm: 1.0,
+  spacerBandMinMm: 5,
+  spacerBandMaxMm: 30,
+
+  flippedStem: 5,
+  extremeAngle: 3,
+  railNearLimit: 4,
+  nonStockSeatpost: 3,
+  integratedCockpit: 6,
+
+  toeOverlap: 12,
+  lowStandover: 15,
+  trailDeviation: 8,
+} as const;
+
+/** The cockpit the engine says to build. */
+export interface RequiredCockpit {
+  readonly stemLength: Millimeters;
+  readonly stemAngle: Degrees;
+  readonly stemFlipped: boolean;
+  readonly spacerHeight: Millimeters;
+  /** Before clamping - what the frame actually demanded. Drives the flags. */
+  readonly unclampedStemLength: Millimeters;
+  readonly unclampedSpacerHeight: Millimeters;
 }
 
 // --- Explanation -----------------------------------------------------------

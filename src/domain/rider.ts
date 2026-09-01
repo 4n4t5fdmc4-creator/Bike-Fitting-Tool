@@ -114,15 +114,26 @@ export type FitProfileOrigin =
 export interface IdealFitProfile {
   readonly origin: FitProfileOrigin;
 
-  /** BB to saddle top, measured along the seat tube axis. */
+  /**
+   * PRIMARY AXIS. Horizontal BB to hood grip centre.
+   *
+   * Grip reach and grip stack are the quantities the frame plus its cockpit
+   * actually produce, and the ones the rider feels. Frame stack and reach remain
+   * the shopping vocabulary, but the target is expressed here.
+   */
+  readonly gripReach: TargetRange;
+  /** PRIMARY AXIS. Vertical BB to hood grip centre. */
+  readonly gripStack: TargetRange;
+
+  /**
+   * Saddle target. A CONSTRAINT, not a scoring axis: seatpost setback comes in
+   * four catalogue values and rails give +-25-30 mm, so a saddle position that
+   * cannot be met is a gate, and one near the rail limit is a minor penalty.
+   * Getting the bars right is the frame decision; the saddle is an afternoon.
+   */
   readonly saddleHeight: Sourced<Millimeters>;
   /** Horizontal BB to the 70 mm saddle-width point. Positive = behind the BB. */
   readonly saddleSetback: Sourced<Millimeters>;
-
-  /** Horizontal saddle reference point to hood grip. The dominant fit dimension. */
-  readonly hoodReach: TargetRange;
-  /** Saddle top above hood grip. Positive = bars below saddle. */
-  readonly hoodDrop: TargetRange;
 
   /** Crank length. Affects the target only indirectly, via saddle height. */
   readonly crankLength?: Sourced<Millimeters>;

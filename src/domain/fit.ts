@@ -31,15 +31,18 @@ export interface ContactPoints {
 
 /** The fitter-facing quantities derived from a set of contact points. */
 export interface FitMetrics {
+  /** PRIMARY. Horizontal BB to hood grip centre. */
+  readonly gripReach: Millimeters;
+  /** PRIMARY. Vertical BB to hood grip centre. */
+  readonly gripStack: Millimeters;
+
   readonly saddleHeight: Millimeters;
   /** Positive = saddle reference point behind the BB. */
   readonly saddleSetback: Millimeters;
-  /** Horizontal saddle reference point to hood grip. */
+  /** Horizontal saddle reference point to hood grip. Secondary, for fitters. */
   readonly hoodReach: Millimeters;
-  /** Saddle top above hood grip. Positive = bars below saddle. */
+  /** Saddle top above hood grip. Secondary, for fitters. */
   readonly hoodDrop: Millimeters;
-  readonly barReach: Millimeters;
-  readonly barDrop: Millimeters;
   /** Frame stack over frame reach. Kept because it is the shopping vocabulary. */
   readonly stackToReach: number;
 }
@@ -76,13 +79,17 @@ export interface ComponentChange {
 export interface TargetContactPoints {
   readonly profile: IdealFitProfile;
   readonly frame: FrameGeometry;
-  readonly saddle: BbPoint;
-  /** Ideal hood position, with the tolerance box the scorer works within. */
-  readonly hoods: BbPoint;
-  readonly hoodReach: TargetRange;
-  readonly hoodDrop: TargetRange;
-  /** Half-width and half-height of the acceptable box around `hoods`. */
+  /** PRIMARY target: BB-relative grip point the scorer aims at. */
+  readonly grip: BbPoint;
+  readonly gripReach: TargetRange;
+  readonly gripStack: TargetRange;
+  /** Half-width and half-height of the acceptable box around `grip`. */
   readonly tolerance: { readonly x: Millimeters; readonly y: Millimeters };
+  /**
+   * Saddle target resolved against this frame's seat angle. Checked for
+   * feasibility only - it never contributes to the score.
+   */
+  readonly saddle: BbPoint;
 }
 
 /**
@@ -105,8 +112,14 @@ export type OptimizationGoal = 'closestFit' | 'cheapestChange' | 'reuseParts';
 export interface OptimizationResult {
   readonly goal: OptimizationGoal;
   readonly setup: CandidateSetup;
-  /** Signed residual after optimisation. Positive = too long / too low. */
-  readonly residual: { readonly reach: Millimeters; readonly drop: Millimeters };
+  /**
+   * Signed residual after clamping to buildable components. Zero for most
+   * frames - three cockpit degrees of freedom against a two-dimensional target
+   * means the grip point is usually reachable exactly. See docs/scoring-engine.md
+   * section 3: this is why the score is dominated by how extreme the required
+   * cockpit is, not by how close the result lands.
+   */
+  readonly residual: { readonly reach: Millimeters; readonly stack: Millimeters };
   /** Adjustments sitting against a hard limit, with the limit named. */
   readonly atLimit: ReadonlyArray<{ readonly what: string; readonly limit: string }>;
 }
