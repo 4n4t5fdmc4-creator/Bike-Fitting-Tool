@@ -1,19 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { withinFitRadius } from '../fitRadius';
+import { DEFAULT_FIT_TOLERANCE, withinFitRadius, type FitTolerance } from '../fitRadius';
 
-describe('fit radius', () => {
-  it('is inside when both axes are within bound', () => {
-    expect(withinFitRadius(10, 15, 15, 20)).toBe(true);
+const tol: FitTolerance = { xs: 12, xl: 8, yl: 15, yh: 10 };
+
+describe('fit tolerance', () => {
+  it('is inside when every side is within its own bound', () => {
+    expect(withinFitRadius(-12, -15, tol)).toBe(true);
+    expect(withinFitRadius(8, 10, tol)).toBe(true);
+    expect(withinFitRadius(0, 0, tol)).toBe(true);
   });
-  it('is outside when either axis exceeds its own bound', () => {
-    expect(withinFitRadius(20, 5, 15, 20)).toBe(false);
-    expect(withinFitRadius(5, 25, 15, 20)).toBe(false);
+
+  it('bounds shorter and longer reach independently', () => {
+    expect(withinFitRadius(-12, 0, tol)).toBe(true);
+    expect(withinFitRadius(-13, 0, tol)).toBe(false);
+    expect(withinFitRadius(8, 0, tol)).toBe(true);
+    expect(withinFitRadius(9, 0, tol)).toBe(false); // longer is the tighter side
   });
-  it('treats the bound as symmetric around zero', () => {
-    expect(withinFitRadius(-15, -20, 15, 20)).toBe(true);
-    expect(withinFitRadius(-16, 0, 15, 20)).toBe(false);
+
+  it('bounds lower and higher stack independently', () => {
+    expect(withinFitRadius(0, -15, tol)).toBe(true);
+    expect(withinFitRadius(0, -16, tol)).toBe(false);
+    expect(withinFitRadius(0, 10, tol)).toBe(true);
+    expect(withinFitRadius(0, 11, tol)).toBe(false);
   });
-  it('is inclusive at the exact bound', () => {
-    expect(withinFitRadius(15, 20, 15, 20)).toBe(true);
+
+  it('is inclusive at the exact bound on every side', () => {
+    expect(withinFitRadius(-12, 10, tol)).toBe(true);
+    expect(withinFitRadius(8, -15, tol)).toBe(true);
+  });
+
+  it('ships the reference-tool defaults', () => {
+    expect(DEFAULT_FIT_TOLERANCE).toEqual({ xs: 12, xl: 8, yl: 15, yh: 10 });
   });
 });

@@ -211,6 +211,8 @@ export function Workspace() {
             anchor={matrixAnchor}
             referenceLabel={referenceLabel}
             anchorIsEstimated={anchorIsEstimated}
+            targetGrip={target?.grip ?? null}
+            referenceBike={client.targetMode === 'reference' ? client.referenceBike : null}
           />
         )}
       </div>

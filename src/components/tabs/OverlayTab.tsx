@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import type { ModelRecommendation } from '@/engine/recommend';
 import type { FrameEvaluation } from '@/engine/score';
 import type { ReferenceBike } from '@/state/studio';
+import { useOverlaySelection } from '@/state/overlaySelection';
+import { useComparisonMode } from '@/state/comparisonMode';
+import { Range, Segmented } from '../controls';
 import { FrameOverlay, type OverlayAlign, type OverlayCandidate } from '../FrameOverlay';
 
 /**
@@ -21,31 +24,53 @@ const PALETTE = [
 ];
 const CAP = PALETTE.length;
 
-/** What build to draw on each frame. */
-type FitMode = 'as-fitted' | 'same-cockpit';
-
 export function OverlayTab({
   models, referenceBike,
 }: { models: ReadonlyArray<ModelRecommendation>; referenceBike: ReferenceBike | null }) {
-  const initialIds = () => models.slice(0, 3).map((m) => m.best.frame.id);
-  const [selected, setSelected] = useState<string[]>(initialIds);
-  // Slots must be assigned at the same moment as the initial selection - a
-  // colour assigned only inside toggle() left every pre-selected frame
-  // defaulting to slot 0, so all the lines rendered in the same colour.
-  const [slotOf, setSlotOf] = useState<Record<string, number>>(() =>
-    Object.fromEntries(initialIds().map((id, i) => [id, i])),
-  );
+  // The selection lives in a shared store so the Matrix scatter can label the
+  // same frames. Slot assignment stays local - it is only a drawing concern.
+  const selected = useOverlaySelection((s) => s.selectedIds);
+  const setSelected = useOverlaySelection((s) => s.setSelectedIds);
+  const [slotOf, setSlotOf] = useState<Record<string, number>>({});
 
-  const [fitMode, setFitMode] = useState<FitMode>('as-fitted');
+  // Every selected frame needs a colour slot. Assign any that lack one and keep
+  // the slots already handed out, so a frame keeps its colour when another is
+  // toggled off and back on. Covers both the initial seed and later toggles -
+  // without this, a freshly seeded selection drew every line in slot 0's colour.
+  useEffect(() => {
+    setSlotOf((prev) => {
+      const missing = selected.filter((id) => !(id in prev));
+      if (missing.length === 0) return prev;
+      const next = { ...prev };
+      for (const id of missing) {
+        const used = new Set(Object.values(next));
+        next[id] = Array.from({ length: CAP }, (_, i) => i).find((sl) => !used.has(sl)) ?? 0;
+      }
+      return next;
+    });
+  }, [selected]);
+
+  // As-fitted / same-cockpit and the shared cockpit are in a store, so the
+  // Matrix hood plot reads the exact same toggle and slider values.
+  const fitMode = useComparisonMode((s) => s.fitMode);
+  const setFitMode = useComparisonMode((s) => s.setFitMode);
+  const cockpit = useComparisonMode((s) => s.cockpit);
+  const setCockpit = useComparisonMode((s) => s.setCockpit);
+  const seedCockpit = useComparisonMode((s) => s.seedCockpit);
+
   const [align, setAlign] = useState<OverlayAlign>('bb');
 
-  // The shared cockpit for "same cockpit" mode. Seeded from the reference bike
-  // when there is one, so the default is the position the fit was measured at.
-  const [stem, setStem] = useState(referenceBike?.stemLength ?? 100);
-  const [stemAngle, setStemAngle] = useState(referenceBike?.stemAngle ?? -6);
-  const [spacers, setSpacers] = useState(referenceBike?.spacerHeight ?? 20);
-  const [barReach, setBarReach] = useState(referenceBike?.barReach ?? 80);
-  const [barRise, setBarRise] = useState(referenceBike?.barRise ?? 0);
+  // Seed the shared cockpit from the reference bike (the position the fit was
+  // measured at). Re-seeds on a client switch, leaves it alone once adjusted.
+  useEffect(() => {
+    seedCockpit(referenceBike?.label ?? 'none', {
+      stemLength: referenceBike?.stemLength ?? 100,
+      stemAngle: referenceBike?.stemAngle ?? -6,
+      spacerHeight: referenceBike?.spacerHeight ?? 20,
+      barReach: referenceBike?.barReach ?? 80,
+      barRise: referenceBike?.barRise ?? 0,
+    });
+  }, [referenceBike, seedCockpit]);
 
   useEffect(() => {
     // Only prune ids that no longer exist (e.g. a frame was deleted); never
@@ -63,12 +88,6 @@ export function OverlayTab({
       if (prev.includes(id)) return prev.filter((x) => x !== id);
       if (prev.length >= CAP) return prev;
       return [...prev, id];
-    });
-    setSlotOf((prev) => {
-      if (id in prev) return prev;
-      const used = new Set(Object.values(prev));
-      const free = Array.from({ length: CAP }, (_, i) => i).find((s) => !used.has(s)) ?? 0;
-      return { ...prev, [id]: free };
     });
   };
 
@@ -93,7 +112,8 @@ export function OverlayTab({
   };
 
   const sharedCockpit = {
-    stemLength: stem, stemAngle, spacerStack: spacers, barReach, barRise,
+    stemLength: cockpit.stemLength, stemAngle: cockpit.stemAngle,
+    spacerStack: cockpit.spacerHeight, barReach: cockpit.barReach, barRise: cockpit.barRise,
   };
 
   const candidates: OverlayCandidate[] = selected
@@ -186,11 +206,11 @@ export function OverlayTab({
 
         {fitMode === 'same-cockpit' && (
           <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <Range label="Stem" unit="mm" v={stem} min={60} max={140} step={5} onChange={setStem} />
-            <Range label="Stem angle" unit="°" v={stemAngle} min={-17} max={17} step={1} onChange={setStemAngle} />
-            <Range label="Spacers" unit="mm" v={spacers} min={0} max={50} step={2.5} onChange={setSpacers} />
-            <Range label="Bar reach" unit="mm" v={barReach} min={65} max={100} step={1} onChange={setBarReach} />
-            <Range label="Bar rise" unit="mm" v={barRise} min={0} max={40} step={1} onChange={setBarRise} />
+            <Range label="Stem" unit="mm" v={cockpit.stemLength} min={60} max={140} step={5} onChange={(v) => setCockpit({ stemLength: v })} />
+            <Range label="Stem angle" unit="°" v={cockpit.stemAngle} min={-17} max={17} step={1} onChange={(v) => setCockpit({ stemAngle: v })} />
+            <Range label="Spacers" unit="mm" v={cockpit.spacerHeight} min={0} max={50} step={2.5} onChange={(v) => setCockpit({ spacerHeight: v })} />
+            <Range label="Bar reach" unit="mm" v={cockpit.barReach} min={65} max={100} step={1} onChange={(v) => setCockpit({ barReach: v })} />
+            <Range label="Bar rise" unit="mm" v={cockpit.barRise} min={0} max={40} step={1} onChange={(v) => setCockpit({ barRise: v })} />
           </div>
         )}
 
@@ -229,53 +249,4 @@ export function OverlayTab({
 function sizeValue(size: string): number {
   const n = parseFloat(size);
   return Number.isFinite(n) ? n : 0;
-}
-
-function Segmented<T extends string>({
-  value, onChange, options,
-}: {
-  value: T;
-  onChange: (v: T) => void;
-  options: ReadonlyArray<{ value: T; label: string }>;
-}) {
-  return (
-    <div className="inline-flex rounded-md border border-[var(--border)] p-0.5 text-xs">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={`rounded px-2 py-1 transition-colors ${
-            value === o.value
-              ? 'bg-[var(--panel-2)] font-semibold text-[var(--foreground)]'
-              : 'text-[var(--text-3)] hover:text-[var(--text-2)]'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-const roundToStep = (v: number, step: number) => Math.round(v / step) * step;
-
-function Range({
-  label, unit, v, min, max, step, onChange,
-}: {
-  label: string; unit: string; v: number; min: number; max: number; step: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <label className="block text-xs">
-      <span className="flex items-baseline justify-between">
-        <span className="text-[var(--text-2)]">{label}</span>
-        <span className="tabular font-semibold">{roundToStep(v, step)} {unit}</span>
-      </span>
-      <input
-        type="range" min={min} max={max} step={step} value={v}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-1.5 w-full accent-[var(--acc)]"
-      />
-    </label>
-  );
 }
