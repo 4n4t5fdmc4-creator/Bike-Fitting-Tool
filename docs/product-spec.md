@@ -710,7 +710,7 @@ single measurement that would narrow it most.
 
 | # | Question | Needed by |
 |---|----------|-----------|
-| Q1 | Seed database sourcing: how far does user-initiated URL import stay defensible, and what needs manufacturer permission? | Before MVP data work |
+| Q1 | **Resolved.** Geometry values are facts and are treated as usable. URL import is user-initiated, user-confirmed and source-attributed. The remaining line is bulk automated harvesting of complete catalogues against a site's terms — out of scope. | — |
 | Q2 | **Resolved.** Both paths ship in MVP: reference bike is the primary entry point, body-measurement derivation is available but visibly lower-confidence. Open sub-question: what confidence delta do we state? | MVP design |
 | Q3 | Confidence band presentation — numeric ±, or qualitative? Needs user testing. | MVP design |
 | Q4 | Does the fitter persona justify a separate mode in MVP, or is it purely V2? | MVP scope lock |

@@ -1,0 +1,29 @@
+# The domain model is the contract the rest of the app is built against, so it
+# must compile under strict TypeScript before it can reach main.
+
+name: Typecheck
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No lockfile is committed yet - there are no runtime dependencies and
+      # TypeScript is the only devDependency. Switch to `npm ci` once one exists.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
