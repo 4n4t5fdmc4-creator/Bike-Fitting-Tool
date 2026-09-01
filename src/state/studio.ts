@@ -104,6 +104,24 @@ export const DEFAULT_REFERENCE: ReferenceBike = {
   barReach: 80, barRise: 0, barId: 'generic-compact',
 };
 
+/**
+ * Picking a frame from the library fills the frame half of the reference, so
+ * only the cockpit has to be typed. The cockpit is the half a fitter actually
+ * knows off the top of their head.
+ */
+export function referenceFromFrame(
+  frame: { model: string; size: string; stack: number; reach: number; headTubeAngle: number },
+  current: ReferenceBike | null,
+): ReferenceBike {
+  return {
+    ...(current ?? DEFAULT_REFERENCE),
+    label: `${frame.model} ${frame.size}`,
+    stack: frame.stack,
+    reach: frame.reach,
+    headTubeAngle: frame.headTubeAngle,
+  };
+}
+
 interface StudioState {
   studio: Studio;
   clients: Client[];

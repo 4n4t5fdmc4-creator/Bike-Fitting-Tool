@@ -10,7 +10,7 @@
 
 import type { BbPoint, Degrees, Millimeters } from '../domain/units';
 import type { ResolvedCockpit } from './forward';
-import { evaluateFrame, type FrameEvaluation } from './score';
+import { evaluateFrame, type CockpitNeutral, type FrameEvaluation } from './score';
 
 export interface CandidateFrame {
   readonly id: string;
@@ -39,6 +39,8 @@ export function recommendByModel(
   frames: ReadonlyArray<CandidateFrame>,
   target: BbPoint,
   base: ResolvedCockpit,
+  /** The client's own cockpit, when they ride a fitted bike. See CockpitNeutral. */
+  neutral?: CockpitNeutral,
 ): ReadonlyArray<ModelRecommendation> {
   const byModel = new Map<string, CandidateFrame[]>();
   for (const f of frames) {
@@ -50,7 +52,10 @@ export function recommendByModel(
   const out: ModelRecommendation[] = [];
   for (const [model, list] of byModel) {
     const scored = list
-      .map((frame) => ({ frame, evaluation: evaluateFrame(frame, target, base, undefined, frame.maxSpacerStack) }))
+      .map((frame) => ({
+        frame,
+        evaluation: evaluateFrame(frame, target, base, undefined, frame.maxSpacerStack, neutral),
+      }))
       .sort((a, b) => b.evaluation.composite - a.evaluation.composite);
 
     const best = scored[0];

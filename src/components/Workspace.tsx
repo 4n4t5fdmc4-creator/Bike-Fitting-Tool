@@ -81,10 +81,15 @@ export function Workspace() {
 
   // Grouped by model: the question is which SIZE of a bike, not which of forty
   // rows. Every size stays available behind the recommendation.
-  const models = useMemo(
-    () => (target ? recommendByModel(catalogue, target.grip, resolveCockpit()) : []),
-    [target, catalogue],
-  );
+  const models = useMemo(() => {
+    if (!target) return [];
+    const ref = client?.targetMode === 'reference' ? client.referenceBike : null;
+    // A fitted client's own cockpit is the neutral one - see CockpitNeutral.
+    const neutral = ref
+      ? { stemLength: ref.stemLength, spacerHeight: ref.spacerHeight }
+      : undefined;
+    return recommendByModel(catalogue, target.grip, resolveCockpit(), neutral);
+  }, [target, catalogue, client]);
 
   if (!ready) {
     return (

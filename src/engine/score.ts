@@ -19,6 +19,20 @@ import { solveAll } from './solve';
 import type { CockpitLimits } from './assumptions';
 import { DEFAULT_LIMITS, clamp, snapStem } from './assumptions';
 
+/**
+ * What counts as an "ordinary" cockpit.
+ *
+ * The defaults are the handling-neutral centre of the range. But when a client
+ * already rides a fitted bike, THEIR cockpit is the neutral one: penalising a
+ * frame for needing the 80 mm stem the client happily rides would rank their own
+ * bike below its neighbours, which is plainly wrong and destroys trust in the
+ * whole list.
+ */
+export interface CockpitNeutral {
+  readonly stemLength: number;
+  readonly spacerHeight: number;
+}
+
 export interface FrameEvaluation {
   readonly frame: FrameCore;
   /** What the frame demanded, before clamping. Flags are diagnosed on this. */
@@ -52,8 +66,11 @@ function evaluateSolution(
   sol: CockpitSolution,
   limits: CockpitLimits,
   frameSpacerMax?: Millimeters,
+  neutral?: CockpitNeutral,
 ): FrameEvaluation {
   const spacerMax = frameSpacerMax ?? limits.spacerMax;
+  const stemNeutral = neutral?.stemLength ?? W.stemNeutralMm;
+  const spacerNeutral = neutral?.spacerHeight ?? W.spacerNeutralMm;
 
   const spacerHeight = mm(clamp(sol.spacerHeight, limits.spacerMin, spacerMax));
   const stemLength = snapStem(
@@ -73,8 +90,8 @@ function evaluateSolution(
       W.unreachableReachPerMm * Math.max(0, Math.abs(dReach) - W.unreachableDeadbandMm),
     unreachableStack:
       W.unreachableStackPerMm * Math.max(0, Math.abs(dStack) - W.unreachableDeadbandMm),
-    stemCentre: W.stemCentrePerMm * Math.abs(stemLength - W.stemNeutralMm),
-    spacerCentre: W.spacerCentrePerMm * Math.abs(spacerHeight - W.spacerNeutralMm),
+    stemCentre: W.stemCentrePerMm * Math.abs(stemLength - stemNeutral),
+    spacerCentre: W.spacerCentrePerMm * Math.abs(spacerHeight - spacerNeutral),
     stemBand: W.stemBandPerMm * outside(stemLength, W.stemBandMinMm, W.stemBandMaxMm),
     spacerBand: W.spacerBandPerMm * outside(spacerHeight, W.spacerBandMinMm, W.spacerBandMaxMm),
     flippedStem: sol.stemAngle > 0 ? W.flippedStem : 0,
@@ -138,9 +155,10 @@ export function evaluateFrame(
   base: ResolvedCockpit,
   limits: CockpitLimits = DEFAULT_LIMITS,
   frameSpacerMax?: Millimeters,
+  neutral?: CockpitNeutral,
 ): FrameEvaluation {
   const evaluations = solveAll(frame, target, base).map((sol) =>
-    evaluateSolution(frame, target, base, sol, limits, frameSpacerMax),
+    evaluateSolution(frame, target, base, sol, limits, frameSpacerMax, neutral),
   );
   // solveAll never returns empty for catalogue angles; the guard keeps the
   // return type honest rather than asserting.

@@ -40,6 +40,8 @@ export interface LibraryFrame {
 const F9_SOURCE =
   'https://pinarello.com/usa/en/bikes/road/competition/new-pinarello-f/pinarello-f9';
 const X5_SOURCE = 'https://pinarello.com/usa/en/bikes/road/endurance/pinarello-x/pinarello-x5';
+const GREVIL_SOURCE =
+  'https://pinarello.com/usa/en/bikes/gravel/competition/new-grevil-f/new-grevil-f3';
 
 const row = (
   model: string, category: LibraryFrame['category'], sourceUrl: string,
@@ -54,6 +56,12 @@ const row = (
   maxSpacerStack: mm(40),
   sourceUrl,
 });
+
+/*
+ * Pinarello publishes geometry on the BUILD page, not the model page:
+ * .../new-grevil-f returns a page without a table, .../new-grevil-f3 has it.
+ * Worth remembering — an earlier attempt gave up one level too high.
+ */
 
 /** Pinarello F9 — race. Columns: A = seat angle, B = head angle, P = chainstay, T = head tube. */
 const F9: ReadonlyArray<LibraryFrame> = [
@@ -81,6 +89,20 @@ const X5: ReadonlyArray<LibraryFrame> = [
   row('Pinarello X5', 'Endurance', X5_SOURCE, '600', 640.4, 388.1, 72.5, 72.5, 422, 230),
 ];
 
-export const FRAME_LIBRARY: ReadonlyArray<LibraryFrame> = [...F9, ...X5];
+/**
+ * New Grevil F3 — gravel. Note the 430 mm chainstays and the tall stack: this is
+ * the geometry that makes a fitted gravel position hard for a race frame to
+ * reach without a flipped stem.
+ */
+const GREVIL: ReadonlyArray<LibraryFrame> = [
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '470', 553.2, 368.4, 70.25, 74.5, 430, 115),
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '500', 568.3, 376.1, 70.5, 74.0, 430, 130),
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '530', 583.2, 383.7, 70.75, 73.75, 430, 150),
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '550', 598.4, 390.4, 71.75, 73.5, 430, 160),
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '575', 613.6, 398.2, 72.0, 73.0, 430, 175),
+  row('Pinarello Grevil F', 'Gravel', GREVIL_SOURCE, '600', 633.7, 406.9, 72.25, 72.5, 430, 195),
+];
+
+export const FRAME_LIBRARY: ReadonlyArray<LibraryFrame> = [...F9, ...X5, ...GREVIL];
 
 export const MODELS: ReadonlyArray<string> = [...new Set(FRAME_LIBRARY.map((x) => x.model))];

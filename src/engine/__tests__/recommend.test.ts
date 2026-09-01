@@ -61,3 +61,34 @@ describe('model-level recommendation', () => {
     }
   });
 });
+
+describe('the client’s own cockpit sets the neutral point', () => {
+  // A fitted client rides an 80 mm stem happily. Scoring against a generic
+  // 100 mm neutral penalises exactly the bike they already own, which would
+  // rank their own frame below its neighbours - visibly wrong, and the fastest
+  // way to lose a fitter's trust in the list.
+  const OWN: CandidateFrame[] = [
+    f('Own', '530', 583.2, 383.7, 70.75),
+    f('Own', '550', 598.4, 390.4, 71.75),
+    f('Own', '575', 613.6, 398.2, 72.0),
+  ];
+  const fitted = resolveCockpit({
+    stemLength: mm(80), stemAngle: deg(-6), spacerHeight: mm(10),
+    barReach: mm(76), barRise: mm(5),
+  });
+  const ownTarget = gripPoint(
+    { stack: mm(598.4), reach: mm(390.4), headTubeAngle: deg(71.75) },
+    fitted,
+  );
+
+  it('ranks the frame the client actually rides first', () => {
+    const rec = recommendByModel(OWN, ownTarget, BASE, { stemLength: 80, spacerHeight: 10 })[0]!;
+    expect(rec.best.frame.size).toBe('550');
+  });
+
+  it('and would not, using the generic neutral', () => {
+    // Documents the behaviour the override exists to fix.
+    const rec = recommendByModel(OWN, ownTarget, BASE)[0]!;
+    expect(rec.best.frame.size).not.toBe('550');
+  });
+});

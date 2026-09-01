@@ -3,7 +3,8 @@
 import { mm, deg } from '@/domain/units';
 import { gripPoint } from '@/engine/forward';
 import { resolveCockpit } from '@/engine/assumptions';
-import { useStudio, DEFAULT_REFERENCE, type Client } from '@/state/studio';
+import { useStudio, DEFAULT_REFERENCE, referenceFromFrame, type Client } from '@/state/studio';
+import { FRAME_LIBRARY } from '@/data/frames';
 import { BAR_LIBRARY, barById } from '@/data/handlebars';
 
 /**
@@ -67,12 +68,28 @@ export function ReferenceBikePanel({ client }: { client: Client }) {
         </p>
       ) : (
         <div className="p-4">
-          <input
-            value={ref?.label ?? ''}
-            onChange={(e) => set({ label: e.target.value })}
-            placeholder="e.g. Pinarello Grevil F 550"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm font-medium"
-          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              value={ref?.label ?? ''}
+              onChange={(e) => set({ label: e.target.value })}
+              placeholder="e.g. Pinarello Grevil F 550"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm font-medium"
+            />
+            <select
+              value=""
+              onChange={(e) => {
+                const f = FRAME_LIBRARY.find((x) => x.id === e.target.value);
+                if (f) updateClient(client.id, { referenceBike: referenceFromFrame(f, ref) });
+              }}
+              aria-label="Fill the frame half from the library"
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-3 py-2 text-sm"
+            >
+              <option value="">Fill frame values from a known bike…</option>
+              {FRAME_LIBRARY.map((f) => (
+                <option key={f.id} value={f.id}>{f.model} · {f.size}</option>
+              ))}
+            </select>
+          </div>
 
           <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)]">
             Frame — from the manufacturer geometry table
