@@ -20,8 +20,21 @@ export interface CandidateFrame {
   readonly reach: Millimeters;
   readonly headTubeAngle: Degrees;
   readonly maxSpacerStack: Millimeters;
-  /** Not used by scoring - carried through only so the overlay can draw a real seat tube angle. */
+  /**
+   * Secondary geometry, not used by scoring - carried through only so the
+   * overlay can draw real tubes instead of typical fallbacks. All optional:
+   * a manufacturer table publishes a different subset for every brand.
+   */
   readonly seatTubeAngle?: Degrees;
+  readonly headTubeLength?: Millimeters;
+  readonly chainstay?: Millimeters;
+  readonly effectiveTopTube?: Millimeters;
+  readonly wheelbase?: Millimeters;
+  readonly bbDrop?: Millimeters;
+  readonly tyreMax?: Millimeters;
+  readonly stockStem?: Millimeters;
+  readonly stockStemAngle?: Degrees;
+  readonly stockSpacers?: Millimeters;
 }
 
 export interface ModelRecommendation {

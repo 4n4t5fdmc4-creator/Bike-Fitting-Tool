@@ -5,7 +5,7 @@ import { deg, mm } from '@/domain/units';
 import { gripPoint } from '@/engine/forward';
 import { deriveTarget } from '@/engine/target';
 import { resolveCockpit } from '@/engine/assumptions';
-import { recommendByModel } from '@/engine/recommend';
+import { recommendByModel, type CandidateFrame } from '@/engine/recommend';
 import { virtualFrameStackReach } from '@/engine/virtualFrame';
 import { FRAME_LIBRARY } from '@/data/frames';
 import { useStudio } from '@/state/studio';
@@ -15,6 +15,36 @@ import { BikesTab } from './tabs/BikesTab';
 import { OverlayTab } from './tabs/OverlayTab';
 import { CockpitTab } from './tabs/CockpitTab';
 import { MatrixTabWrapper } from './tabs/MatrixTabWrapper';
+
+/**
+ * Both frame sources - the fitter's stored frames and the built-in library -
+ * collapse to the same candidate shape here. Secondary geometry is passed
+ * through only when present, so the overlay can tell a measured tube from a
+ * typical fallback.
+ */
+const toCandidate = (f: {
+  id: string; model: string; size: string;
+  stack: number; reach: number; headTubeAngle: number; maxSpacerStack: number;
+  seatTubeAngle?: number | undefined; headTubeLength?: number | undefined;
+  chainstay?: number | undefined; effectiveTopTube?: number | undefined;
+  wheelbase?: number | undefined; bbDrop?: number | undefined; tyreMax?: number | undefined;
+  stockStem?: number | undefined; stockStemAngle?: number | undefined;
+  stockSpacers?: number | undefined;
+}): CandidateFrame => ({
+  id: f.id, model: f.model, size: f.size,
+  stack: mm(f.stack), reach: mm(f.reach), headTubeAngle: deg(f.headTubeAngle),
+  maxSpacerStack: mm(f.maxSpacerStack),
+  ...(f.seatTubeAngle !== undefined ? { seatTubeAngle: deg(f.seatTubeAngle) } : {}),
+  ...(f.headTubeLength !== undefined ? { headTubeLength: mm(f.headTubeLength) } : {}),
+  ...(f.chainstay !== undefined ? { chainstay: mm(f.chainstay) } : {}),
+  ...(f.effectiveTopTube !== undefined ? { effectiveTopTube: mm(f.effectiveTopTube) } : {}),
+  ...(f.wheelbase !== undefined ? { wheelbase: mm(f.wheelbase) } : {}),
+  ...(f.bbDrop !== undefined ? { bbDrop: mm(f.bbDrop) } : {}),
+  ...(f.tyreMax !== undefined ? { tyreMax: mm(f.tyreMax) } : {}),
+  ...(f.stockStem !== undefined ? { stockStem: mm(f.stockStem) } : {}),
+  ...(f.stockStemAngle !== undefined ? { stockStemAngle: deg(f.stockStemAngle) } : {}),
+  ...(f.stockSpacers !== undefined ? { stockSpacers: mm(f.stockSpacers) } : {}),
+});
 
 export function Workspace() {
   // zustand/persist only reads localStorage on the client. Rendering stored
@@ -66,20 +96,8 @@ export function Workspace() {
   const catalogue = useMemo(
     () =>
       storedFrames.length > 0
-        ? storedFrames.map((f) => ({
-            id: f.id, model: f.model, size: f.size,
-            stack: mm(f.stack), reach: mm(f.reach),
-            headTubeAngle: deg(f.headTubeAngle),
-            maxSpacerStack: mm(f.maxSpacerStack),
-            seatTubeAngle: deg(f.seatTubeAngle),
-          }))
-        : FRAME_LIBRARY.map((f) => ({
-            id: f.id, model: f.model, size: f.size,
-            stack: f.stack, reach: f.reach,
-            headTubeAngle: f.headTubeAngle,
-            maxSpacerStack: f.maxSpacerStack,
-            seatTubeAngle: f.seatTubeAngle,
-          })),
+        ? storedFrames.map(toCandidate)
+        : FRAME_LIBRARY.map(toCandidate),
     [storedFrames],
   );
 
