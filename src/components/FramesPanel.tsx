@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useStudio, type StoredFrame } from '@/state/studio';
 import {
-  detectOrientation, matchHeaderWithLegend, parseLegend, parseNumber, splitPaste, toSizeRows,
-  type FieldKey,
+  detectOrientation, isSpecList, matchHeaderWithLegend, parseLegend, parseNumber, specListToRow,
+  splitPaste, toSizeRows, type FieldKey,
 } from '@/ingest/parse';
 
 /** Plausibility gates, mirroring src/domain/validation.ts. */
@@ -193,12 +193,22 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
    * the fitter assigns it, and the import proceeds.
    */
   const [overrides, setOverrides] = useState<Record<number, FieldKey | ''>>({});
+  /** Only used for vertical spec lists, where the size lives outside the table. */
+  const [manualSize, setManualSize] = useState('');
 
   const parsed = useMemo(() => {
     const table = splitPaste(text);
     if (!table) return null;
-    const orientation = detectOrientation(table);
-    const rows = orientation === 'sizesAsColumns' ? toSizeRows(table) : table;
+
+    // Three shapes in the wild: sizes across the top, sizes down the side, and a
+    // vertical label/value list describing a single size.
+    const specList = isSpecList(table);
+    const orientation = specList ? ('specList' as const) : detectOrientation(table);
+    const rows = specList
+      ? specListToRow(table)
+      : orientation === 'sizesAsColumns'
+        ? toSizeRows(table)
+        : table;
     // Several brands label columns with letters keyed to a drawing. Pasting the
     // legend alongside the table is what makes those readable.
     const legend = parseLegend(legendText);
@@ -218,14 +228,14 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
       const detected = mapping.findIndex((m) => m.field === 'size');
       const sizeIdx = sizeColumn ?? (detected >= 0 ? detected : 0);
       return {
-        model, size: r[sizeIdx] ?? '',
+        model, size: specList ? manualSize : (r[sizeIdx] ?? ''),
         stack: get('stack') ?? 0, reach: get('reach') ?? 0,
         headTubeAngle: get('headTubeAngle') ?? 0, seatTubeAngle: get('seatTubeAngle') ?? 0,
         maxSpacerStack: 40, source: 'pasted' as const, sourceUrl,
       };
     });
-    return { orientation, mapping, rows, drafts };
-  }, [text, model, sourceUrl, legendText, sizeColumn, overrides]);
+    return { orientation, specList, mapping, rows, drafts };
+  }, [text, model, sourceUrl, legendText, sizeColumn, overrides, manualSize]);
 
   const usable = parsed?.drafts.filter((d) => checkBounds(d).length === 0 && d.size !== '') ?? [];
   const rejected = (parsed?.drafts.length ?? 0) - usable.length;
@@ -298,11 +308,13 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
             <p className="text-xs text-[var(--text-2)]">
               Read as{' '}
               <b>
-                {parsed.orientation === 'sizesAsColumns'
-                  ? 'sizes across the top'
-                  : parsed.orientation === 'sizesAsRows'
-                    ? 'sizes down the side'
-                    : 'ambiguous — check carefully'}
+                {parsed.orientation === 'specList'
+                  ? 'a spec list for one size'
+                  : parsed.orientation === 'sizesAsColumns'
+                    ? 'sizes across the top'
+                    : parsed.orientation === 'sizesAsRows'
+                      ? 'sizes down the side'
+                      : 'ambiguous — check carefully'}
               </b>
               . Anything unrecognised can be assigned by hand — no tool knows every brand's wording.
             </p>
@@ -341,6 +353,25 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
             </p>
           )}
 
+          {parsed.specList ? (
+            <label className="block text-xs">
+              <span className="text-[var(--text-2)]">
+                Size name{' '}
+                <span className="text-[var(--text-3)]">
+                  — this shape describes one size at a time, and the size is not in the table
+                </span>
+              </span>
+              <input
+                value={manualSize}
+                onChange={(e) => setManualSize(e.target.value)}
+                placeholder="e.g. 56"
+                className="mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-sm sm:max-w-[12rem]"
+              />
+              <span className="mt-1 block text-[11px] text-[var(--text-3)]">
+                Switch the size on the manufacturer page and paste again for each one.
+              </span>
+            </label>
+          ) : (
           <label className="block text-xs">
             <span className="text-[var(--text-2)]">
               Size column{' '}
@@ -361,6 +392,7 @@ function PasteImport({ onAdd }: { onAdd: (d: Draft[]) => void }) {
               ))}
             </select>
           </label>
+          )}
 
           <div className="overflow-x-auto rounded-md border border-[var(--border)]">
             <table className="tabular w-full min-w-[32rem] text-xs">

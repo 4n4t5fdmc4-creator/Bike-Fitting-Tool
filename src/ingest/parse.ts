@@ -28,17 +28,17 @@ export type FieldKey =
  */
 const SYNONYMS: Record<FieldKey, string[]> = {
   size: ['size', 'frame size', 'groesse', 'grosse', 'rahmenhohe', 'rahmengrosse', 'taglia'],
-  stack: ['stack', 'stack height', 'uberhohung'],
-  reach: ['reach', 'horizontal reach'],
+  stack: ['stack', 'frame stack', 'stack height', 'uberhohung'],
+  reach: ['reach', 'frame reach', 'horizontal reach'],
   headTubeAngle: ['head tube angle', 'headtube angle', 'head angle', 'steering tube angle', 'steering angle', 'steerer angle', 'fork angle', 'steuerrohrwinkel', 'lenkwinkel', 'angolo sterzo'],
   seatTubeAngle: ['seat tube angle', 'seattube angle', 'seat angle', 'sitzrohrwinkel', 'angolo piantone'],
   headTubeLength: ['head tube', 'headtube', 'head tube length', 'steuerrohr', 'steuerrohrlange', 'tubo sterzo'],
   seatTubeLength: ['seat tube', 'seattube', 'seat tube length', 'sitzrohr', 'rahmenhohe', 'tubo piantone'],
-  chainstay: ['chainstay', 'chain stay', 'chainstay length', 'chain stay length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
+  chainstay: ['chainstay', 'chain stay', 'chainstay length', 'chain stay length', 'rear centre length', 'rear centre', 'rear center', 'kettenstrebe', 'foderi bassi'],
   wheelbase: ['wheelbase', 'radstand', 'interasse'],
   bbDrop: ['bb drop', 'bottom bracket drop', 'tretlagerabsenkung', 'ribassamento'],
-  forkRake: ['fork rake', 'fork offset', 'rake', 'offset', 'gabelvorbiegung'],
-  standover: ['standover', 'stand over', 'standover height', 'uberstandshohe', 'altezza cavallo'],
+  forkRake: ['fork rake', 'fork offset', 'fork rake offset', 'rake', 'offset', 'gabelvorbiegung'],
+  standover: ['standover', 'stand over', 'standover height', 'bike standover height', 'uberstandshohe', 'altezza cavallo'],
 };
 
 /** Lowercase, strip units, punctuation and diacritics, collapse whitespace. */
@@ -207,6 +207,33 @@ export function splitPaste(text: string): RawTable | null {
 }
 
 const SIZE_TOKEN = /^(3[5-9]|4\d|5\d|6[0-5])(\.\d)?$|^(XXS|XS|S|M|ML|L|XL|XXL)$|^\d{3}$/i;
+
+/**
+ * A third table shape: a vertical label/value list describing ONE size, with the
+ * size chosen by a control elsewhere on the page. Specialized publishes this
+ * way, as do several others - "Frame Stack | 501mm" down the page rather than a
+ * matrix across it.
+ *
+ * Detected rather than assumed: two columns wide, and the left column has to
+ * read like field names. A two-column matrix of one size against one measurement
+ * would look identical otherwise.
+ */
+export function isSpecList(t: RawTable): boolean {
+  const all = [t.headers, ...t.rows];
+  if (all.length < 4) return false;
+  if (all.some((r) => r.length !== 2)) return false;
+  const named = all.filter((r) => matchHeader(r[0] ?? '').field !== null).length;
+  return named >= 3;
+}
+
+/** Turn a label/value list into a one-row table the rest of the pipeline understands. */
+export function specListToRow(t: RawTable): RawTable {
+  const all = [t.headers, ...t.rows];
+  return {
+    headers: all.map((r) => r[0] ?? ''),
+    rows: [all.map((r) => r[1] ?? '')],
+  };
+}
 
 /**
  * Geometry tables come both ways: sizes across the top, or sizes down the side.

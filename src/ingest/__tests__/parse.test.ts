@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   detectOrientation, matchHeader, matchHeaderWithLegend, normaliseHeader, parseLegend,
-  parseNumber, splitPaste, toSizeRows,
+  parseNumber, splitPaste, toSizeRows, isSpecList, specListToRow,
 } from '../parse';
 
 describe('header normalisation', () => {
@@ -169,5 +169,50 @@ describe('real manufacturer vocabulary', () => {
     expect(parseNumber('420mm')).toBe(420);
     expect(parseNumber('75.5°')).toBe(75.5);
     expect(parseNumber('1002mm')).toBe(1002);
+  });
+});
+
+describe('vertical spec lists (one size at a time)', () => {
+  // Specialized publishes geometry as a label/value list for the selected size,
+  // switched by buttons elsewhere on the page - neither a row-per-size nor a
+  // column-per-size matrix.
+  const SPECIALIZED = [
+    'Crank Length\t165mm', 'Handlebar Width\t380mm', 'Stem Length\t80mm',
+    'Frame Stack\t501mm', 'Frame Reach\t366mm', 'Head Tube Length\t99mm',
+    'Head Tube Angle\t70.5°', 'BB Drop\t74mm', 'Fork Rake/Offset\t47mm',
+    'Chainstay Length\t410mm', 'Wheelbase\t970mm', 'Seat Tube Angle\t75.5°',
+  ].join('\n');
+
+  it('recognises the shape instead of mangling it as a matrix', () => {
+    const t = splitPaste(SPECIALIZED)!;
+    expect(isSpecList(t)).toBe(true);
+  });
+
+  it('does not mistake a real two-column matrix for a spec list', () => {
+    const matrix = splitPaste('Size\t54\nStack\t545\nReach\t388')!;
+    // Only three rows, and too few recognised labels to be sure.
+    expect(isSpecList(matrix)).toBe(false);
+  });
+
+  it('flattens it into one frame with the right values', () => {
+    const row = specListToRow(splitPaste(SPECIALIZED)!);
+    const mapping = row.headers.map((h) => matchHeader(h).field);
+    const get = (f: string) => {
+      const i = mapping.indexOf(f as never);
+      return i >= 0 ? parseNumber(row.rows[0]![i] ?? '') : null;
+    };
+    expect(get('stack')).toBe(501);
+    expect(get('reach')).toBe(366);
+    expect(get('headTubeAngle')).toBe(70.5);
+    expect(get('seatTubeAngle')).toBe(75.5);
+    expect(get('chainstay')).toBe(410);
+    expect(get('wheelbase')).toBe(970);
+  });
+
+  it('reads Specialized field wording', () => {
+    expect(matchHeader('Frame Stack').field).toBe('stack');
+    expect(matchHeader('Frame Reach').field).toBe('reach');
+    expect(matchHeader('Fork Rake/Offset').field).toBe('forkRake');
+    expect(matchHeader('Bike Standover Height').field).toBe('standover');
   });
 });
