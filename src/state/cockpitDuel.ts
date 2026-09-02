@@ -3,12 +3,15 @@
 import { create } from 'zustand';
 
 /**
- * The two-bike cockpit duel: which frames are in slots A and B, and each
- * frame's cockpit.
+ * The two-bike cockpit duel keeps one thing: each frame's cockpit, by frame id,
+ * for the whole session. Switching a slot to another bike and back - or leaving
+ * the tab and returning - never loses an edit.
  *
- * Cockpits are kept per frame id for the whole session, so switching a slot to
- * another bike and back - or leaving the tab and returning - never loses an
- * edit. Not persisted to disk: each cockpit starts from the frame's recommended
+ * Which frames sit in slots A and B is NOT here: that is the shared comparison
+ * selection (`useOverlaySelection`), so a pick made on Compare or Matrix lands
+ * here too.
+ *
+ * Not persisted to disk: each cockpit starts from the frame's recommended
  * build, which depends on the current client.
  */
 export interface DuelCockpit {
@@ -20,10 +23,6 @@ export interface DuelCockpit {
 }
 
 interface CockpitDuelStore {
-  slotA: string | null;
-  slotB: string | null;
-  setSlot: (slot: 'A' | 'B', id: string) => void;
-
   cockpits: Record<string, DuelCockpit>;
   setCockpit: (id: string, patch: Partial<DuelCockpit>) => void;
   /** Seed a frame's cockpit from its recommended build - only if it has none yet. */
@@ -31,10 +30,6 @@ interface CockpitDuelStore {
 }
 
 export const useCockpitDuel = create<CockpitDuelStore>((set) => ({
-  slotA: null,
-  slotB: null,
-  setSlot: (slot, id) => set(slot === 'A' ? { slotA: id } : { slotB: id }),
-
   cockpits: {},
   setCockpit: (id, patch) =>
     set((s) => ({

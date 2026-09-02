@@ -40,7 +40,7 @@ export function StudioBar() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--panel)]/95 backdrop-blur">
+    <header className="no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--panel)]/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-2.5">
         <button
           onClick={() => logoInput.current?.click()}

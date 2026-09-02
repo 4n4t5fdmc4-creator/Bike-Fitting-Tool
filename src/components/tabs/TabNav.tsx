@@ -12,7 +12,7 @@ export const TABS: ReadonlyArray<{ id: TabId; label: string; step: number }> = [
 
 export function TabNav({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
   return (
-    <nav className="sticky top-[49px] z-10 -mx-4 border-b border-[var(--border)] bg-[var(--background)]/95 px-4 backdrop-blur">
+    <nav className="no-print sticky top-[49px] z-10 -mx-4 border-b border-[var(--border)] bg-[var(--background)]/95 px-4 backdrop-blur">
       <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto">
         {TABS.map((t) => (
           <button

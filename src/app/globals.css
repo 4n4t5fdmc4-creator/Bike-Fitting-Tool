@@ -223,3 +223,98 @@ body {
     @apply font-sans;
   }
 }
+/*
+ ---break---
+ */
+/*
+ * Print / PDF. A fitter hands the client the Compare drawing and the Matrix
+ * table on paper, so those two views have to survive leaving the screen: the
+ * dark palette flips to ink-on-white, the app chrome and every slider drop
+ * out, and the horizontally-scrolling table and charts are allowed their full
+ * width instead of being clipped to a scroll box.
+ *
+ * Scope is controlled from the page: `.no-print` hides an element, the
+ * `.printable` wrapper carries the report, and `.print-only` shows a paper
+ * header that is invisible on screen.
+ */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* Dark is a screen choice. On paper it is black text on white, always. */
+  :root,
+  .dark {
+    --background: #ffffff;
+    --foreground: #111111;
+    --panel: #ffffff;
+    --panel-2: #f4f4f2;
+    --card: #ffffff;
+    --card-foreground: #111111;
+    --border: #b8b8b4;
+    --text-2: #333333;
+    --text-3: #575753;
+    --acc: #1a5fb4;
+    --muted-foreground: #575753;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* App chrome and controls the client does not need on the handout. */
+  .no-print,
+  input[type="range"] {
+    display: none !important;
+  }
+
+  /* Let clipped tables and charts print at full width. */
+  .overflow-x-auto,
+  .overflow-hidden {
+    overflow: visible !important;
+  }
+  table {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 10px;
+    border-collapse: collapse;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr,
+  td,
+  th,
+  li,
+  svg {
+    break-inside: avoid;
+  }
+  svg {
+    max-width: 100% !important;
+    height: auto;
+  }
+
+  /* Source links are printed as plain text - the URL itself is in the CSV. */
+  a[href]::after {
+    content: "";
+  }
+
+  .print-only {
+    display: block;
+  }
+  .printable {
+    border: none !important;
+  }
+  /* Keep the scatter zones, isolines and frame colours on the printout. */
+  .printable,
+  .printable * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

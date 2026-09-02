@@ -9,7 +9,10 @@ import { recommendByModel, type CandidateFrame } from '@/engine/recommend';
 import { virtualFrameStackReach } from '@/engine/virtualFrame';
 import { FRAME_LIBRARY } from '@/data/frames';
 import { useStudio } from '@/state/studio';
+import { useActiveTab } from '@/state/activeTab';
+import { useOverlaySelection } from '@/state/overlaySelection';
 import { TabNav, type TabId } from './tabs/TabNav';
+import { StepIndicator } from './StepIndicator';
 import { ProfileTab } from './tabs/ProfileTab';
 import { BikesTab } from './tabs/BikesTab';
 import { OverlayTab } from './tabs/OverlayTab';
@@ -59,14 +62,22 @@ export function Workspace() {
   const [ready, setReady] = useState(false);
   useEffect(() => setReady(true), []);
 
-  const [tab, setTab] = useState<TabId>('profile');
-
   const clients = useStudio((s) => s.clients);
   const storedFrames = useStudio((s) => s.frames);
   const activeClientId = useStudio((s) => s.activeClientId);
   const addClient = useStudio((s) => s.addClient);
+  const studio = useStudio((s) => s.studio);
 
   const client = clients.find((c) => c.id === activeClientId) ?? null;
+
+  // The open tab is kept per client and persisted, so switching to another
+  // client and back returns to where the fitter was, not to step 1.
+  const storedTab = useActiveTab((s) => (activeClientId ? s.byClient[activeClientId] : undefined));
+  const setStoredTab = useActiveTab((s) => s.setTab);
+  const tab: TabId = storedTab ?? 'profile';
+  const setTab = (t: TabId) => {
+    if (activeClientId) setStoredTab(activeClientId, t);
+  };
 
   const target = useMemo(() => {
     if (!client) return null;
@@ -128,10 +139,26 @@ export function Workspace() {
     return recommendByModel(catalogue, target.grip, base, neutral);
   }, [target, catalogue, client]);
 
+  // The comparison selection is shared by Compare, Cockpit and Matrix. Prune
+  // ids whose frame is gone and seed the top three when nothing is picked -
+  // once, here, so the set is the same whichever tab the fitter opens first.
+  const setSelectedIds = useOverlaySelection((s) => s.setSelectedIds);
+  const comparedCount = useOverlaySelection((s) => s.selectedIds.length);
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const valid = new Set(models.flatMap((m) => m.allSizes.map((s) => s.frame.id)));
+      const kept = prev.filter((id) => valid.has(id));
+      return kept.length > 0 ? kept : models.slice(0, 3).map((m) => m.best.frame.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models.length, setSelectedIds]);
+
   const referenceLabel =
     client?.targetMode === 'reference' && client.referenceBike?.label
       ? client.referenceBike.label
       : 'the target position';
+
+  const hasReferenceBike = client?.targetMode === 'reference' && client.referenceBike !== null;
 
   // The matrix compares raw frame geometry to a starting point - a real
   // reference bike's own stack/reach when there is one, otherwise a derived
@@ -182,10 +209,41 @@ export function Workspace() {
     );
   }
 
+  const printable = tab === 'overlay' || tab === 'matrix';
+
   return (
     <>
       <TabNav active={tab} onChange={setTab} />
-      <div className="mx-auto max-w-6xl px-4 py-6">
+
+      <div className="no-print mx-auto max-w-6xl px-4 pt-3">
+        <StepIndicator
+          hasReferenceBike={hasReferenceBike}
+          usingExamples={usingExamples}
+          frameCount={models.length}
+          comparedCount={comparedCount}
+        />
+      </div>
+
+      <div className={`mx-auto max-w-6xl px-4 py-6 ${printable ? 'printable' : ''}`}>
+        {printable && (
+          <>
+            <div className="no-print mb-3 flex justify-end">
+              <button
+                onClick={() => window.print()}
+                className="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text-2)] hover:border-[var(--acc)] hover:text-[var(--foreground)]"
+              >
+                Print / PDF
+              </button>
+            </div>
+            <PrintHeader
+              studioName={studio.name}
+              clientName={client.name}
+              view={tab === 'overlay' ? 'Frame comparison' : 'Fit matrix'}
+              referenceLabel={referenceLabel}
+            />
+          </>
+        )}
+
         {tab === 'profile' && <ProfileTab client={client} />}
 
         {tab === 'bikes' && (
@@ -223,5 +281,30 @@ export function Workspace() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Shown only on paper (`.print-only`): the fitter hands the client a sheet, and
+ * a sheet needs to say whose fit it is and when it was run.
+ */
+function PrintHeader({
+  studioName, clientName, view, referenceLabel,
+}: {
+  studioName: string;
+  clientName: string;
+  view: string;
+  referenceLabel: string;
+}) {
+  return (
+    <header className="print-only mb-4 border-b border-[var(--border)] pb-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-sm font-semibold">{studioName || 'Bike fitting'}</span>
+        <span className="text-xs">{new Date().toLocaleDateString()}</span>
+      </div>
+      <div className="mt-0.5 text-xs">
+        {view} — client: {clientName} · measured against {referenceLabel}
+      </div>
+    </header>
   );
 }

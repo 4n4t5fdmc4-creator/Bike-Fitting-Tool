@@ -8,6 +8,7 @@ import type { ModelRecommendation } from '@/engine/recommend';
 import type { FrameEvaluation } from '@/engine/score';
 import type { ReferenceBike } from '@/state/studio';
 import { useCockpitDuel, type DuelCockpit } from '@/state/cockpitDuel';
+import { useOverlaySelection } from '@/state/overlaySelection';
 import { makeProjection } from '@/lib/projection';
 import { Range } from './controls';
 
@@ -56,16 +57,27 @@ export function CockpitDuel({
     [models],
   );
 
-  const slotA = useCockpitDuel((s) => s.slotA);
-  const slotB = useCockpitDuel((s) => s.slotB);
-  const setSlot = useCockpitDuel((s) => s.setSlot);
+  // Which two frames are in play is the shared comparison selection, so a pick
+  // made on Compare or Matrix is already here (and vice versa). Slot A is
+  // selection[0], slot B is selection[1].
+  const selectedIds = useOverlaySelection((s) => s.selectedIds);
+  const setAt = useOverlaySelection((s) => s.setAt);
+  const seedIfEmpty = useOverlaySelection((s) => s.seedIfEmpty);
   const cockpits = useCockpitDuel((s) => s.cockpits);
   const setCockpit = useCockpitDuel((s) => s.setCockpit);
   const seedCockpit = useCockpitDuel((s) => s.seedCockpit);
 
-  const has = (id: string | null) => id !== null && flat.some((f) => f.frame.id === id);
-  const idA = has(slotA) ? slotA! : flat[0]?.frame.id ?? null;
-  const idB = has(slotB) ? slotB! : flat[1]?.frame.id ?? flat[0]?.frame.id ?? null;
+  // If the fitter opened Cockpit before ever visiting Compare, seed the shared
+  // selection from the top recommendations so both slots have a bike.
+  useEffect(() => {
+    if (models.length > 0) seedIfEmpty(models.slice(0, 3).map((m) => m.best.frame.id));
+  }, [models, seedIfEmpty]);
+
+  const has = (id: string | null | undefined) => !!id && flat.some((f) => f.frame.id === id);
+  const idA = has(selectedIds[0]) ? selectedIds[0]! : flat[0]?.frame.id ?? null;
+  const idB = has(selectedIds[1])
+    ? selectedIds[1]!
+    : flat.find((f) => f.frame.id !== idA)?.frame.id ?? idA ?? null;
 
   const bikeA = flat.find((f) => f.frame.id === idA);
   const bikeB = flat.find((f) => f.frame.id === idB);
@@ -127,14 +139,14 @@ export function CockpitDuel({
         <BikePanel
           slot="A" color={COLOR_A} flat={flat} bike={bikeA} cockpit={cockpitA} target={target}
           hood={rA.hood}
-          onPick={(id) => setSlot('A', id)}
+          onPick={(id) => setAt(0, id)}
           onChange={(patch) => setCockpit(idA, patch)}
           onReset={() => setCockpit(idA, recommendedFor(bikeA))}
         />
         <BikePanel
           slot="B" color={COLOR_B} flat={flat} bike={bikeB} cockpit={cockpitB} target={target}
           hood={rB.hood}
-          onPick={(id) => setSlot('B', id)}
+          onPick={(id) => setAt(1, id)}
           onChange={(patch) => setCockpit(idB, patch)}
           onReset={() => setCockpit(idB, recommendedFor(bikeB))}
         />

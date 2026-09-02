@@ -72,16 +72,8 @@ export function OverlayTab({
     });
   }, [referenceBike, seedCockpit]);
 
-  useEffect(() => {
-    // Only prune ids that no longer exist (e.g. a frame was deleted); never
-    // reset the selection just because the model list re-rendered.
-    setSelected((prev) => {
-      const valid = new Set(models.flatMap((m) => m.allSizes.map((s) => s.frame.id)));
-      const kept = prev.filter((id) => valid.has(id));
-      return kept.length > 0 ? kept : models.slice(0, 3).map((m) => m.best.frame.id);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models.length]);
+  // Pruning invalid ids and seeding an empty selection is done once, in
+  // Workspace, so the working set is the same no matter which tab mounts first.
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -175,7 +167,7 @@ export function OverlayTab({
               tube, so identity never rests on colour alone.
             </p>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="no-print flex flex-col gap-2">
             <Segmented
               value={fitMode}
               onChange={setFitMode}
@@ -205,7 +197,7 @@ export function OverlayTab({
         </p>
 
         {fitMode === 'same-cockpit' && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="no-print mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <Range label="Stem" unit="mm" v={cockpit.stemLength} min={60} max={140} step={5} onChange={(v) => setCockpit({ stemLength: v })} />
             <Range label="Stem angle" unit="°" v={cockpit.stemAngle} min={-17} max={17} step={1} onChange={(v) => setCockpit({ stemAngle: v })} />
             <Range label="Spacers" unit="mm" v={cockpit.spacerHeight} min={0} max={50} step={2.5} onChange={(v) => setCockpit({ spacerHeight: v })} />
@@ -214,7 +206,7 @@ export function OverlayTab({
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="no-print mt-3 flex flex-wrap gap-1.5">
           {chips.map((s) => {
             const id = s.frame.id;
             const isOn = selected.includes(id);
