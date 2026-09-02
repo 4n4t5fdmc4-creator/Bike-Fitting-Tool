@@ -10,7 +10,7 @@
  * system simply marks them optional.
  */
 
-import type { Degrees, Millimeters, Provenance, Sourced } from './units.js';
+import type { Degrees, Millimeters, Provenance, Sourced } from './units';
 
 // --- Body ------------------------------------------------------------------
 

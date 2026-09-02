@@ -7,8 +7,8 @@
  * way to guarantee that is to make the two states different shapes.
  */
 
-import type { Degrees, Millimeters, Score, Sigma } from './units.js';
-import type { CandidateSetup } from './fit.js';
+import type { Degrees, Millimeters, Score, Sigma } from './units';
+import type { CandidateSetup } from './fit';
 
 // --- Feasibility -----------------------------------------------------------
 

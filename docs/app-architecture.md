@@ -327,7 +327,7 @@ const toSvg = (p: BbPoint) => ({ x: (p.x - minX) * s, y: (maxY - p.y) * s })
 
 | # | Visual | Form | Job |
 |---|--------|------|-----|
-| 1 | `FrameOverlay` | Superimposed line drawings, BB-aligned | Identity + shape comparison |
+| 1 | `FrameOverlay` | Superimposed line drawings, aligned at BB or at the hoods | Identity + shape comparison |
 | 2 | `GripPointPlot` | Scatter in (grip reach, grip stack) space, target box overlaid | Position relative to target |
 | 3 | `AttributionWaterfall` | Horizontal waterfall, single mm axis | Magnitude of each cause |
 
@@ -336,25 +336,37 @@ are millimetres in the same physical space. That is not a dual-axis chart, which
 would put two different measures on two scales. The distinction matters and the
 rule is respected.
 
-### 6.4 The overlay caps at three frames
+### 6.4 The overlay shows up to eight frames
 
+**Revised 2026-09-01.** The earlier cap of three was a cap on *colour alone*.
 The validated categorical palette clears the all-pairs colour-difference floors
-for **its first three slots only**. An overlay is an all-pairs case — any two
-frames sit adjacent visually — so four or more frames cannot be told apart
-reliably by colour, and re-stepping a documented palette is not permitted.
+for its first three slots only — slots 1–3 pass every check in both modes
+(worst CVD ΔE 9.4 dark / 9.2 light), and slot 4 fails hard (orange against
+yellow, ΔE 4.8 under deuteranopia). Re-stepping the documented palette is still
+not permitted.
 
-The cap is therefore: **one reference frame plus two candidates.** Beyond that,
-the UI switches to **small multiples** — a facet grid of individual frames at a
-shared scale, each with the reference ghosted behind it.
+But colour is not the only encoding available. The overlay draws a **direct
+label at every frame's head tube** (§6.7), and with a secondary encoding present
+the palette rule no longer forces a cap of three. So the overlay carries **up to
+eight frames**, matching the reference tool:
 
-Verified with the palette validator rather than asserted. Slots 1–3 pass every
-all-pairs check in both modes (worst CVD ΔE 9.4 dark / 9.2 light). Adding slot 4
-fails hard: orange against yellow measures ΔE 4.8 under deuteranopia and 10.6
-with normal vision, below the 15 floor where full-colour readers can no longer
-separate a pair.
+- Slots 1–3 keep the validated colours and are separable by colour alone.
+- Slots 4–8 add distinct-but-not-validated hues; the head-tube label is what
+  carries their identity, and the on-chart legend plus the table view (§6.8)
+  back it up.
+- The reference frame is drawn dashed in secondary ink and does not consume a
+  colour slot.
 
-This is the right product decision independently: six superimposed frames is an
-unreadable tangle, and the useful comparison is exactly three.
+Small multiples remain a reasonable future escape hatch for very dense
+comparisons, but eight superimposed frames with labels is readable and is the
+comparison fitters actually asked for.
+
+**Two registrations.** The overlay can align every frame at the bottom bracket
+(raw frame reach and stack) or at the hood grip (same hand position, different
+bike — the frames fan out behind a shared point). Independently, each frame is
+drawn either with its own recommended build ("as fitted") or with one shared
+cockpit ("same cockpit"), so a difference in the drawing can be pinned to the
+frame rather than the build.
 
 ### 6.4.1 The reference frame is a selection, not a fixed role
 
@@ -430,8 +442,9 @@ Interactive by default, per the visualization rules:
 - `GripPointPlot`: per-point tooltip with grip reach/stack and deviation from target.
 - `AttributionWaterfall`: per-bar tooltip with the full sentence for that term.
 - Hit targets are larger than the marks — an invisible padded `<rect>` per frame.
-- Legend always present for ≥ 2 series; with ≤ 3 series, direct labels at each
-  frame's head tube as well, so identity never rests on colour alone.
+- Legend always present for ≥ 2 series; direct labels at each frame's head tube
+  as well, at every count, so identity never rests on colour alone. This is a
+  hard requirement above three frames (§6.4), not a nicety.
 
 ### 6.8 Accessibility
 
@@ -483,7 +496,7 @@ surface, per the palette reference.
 
 Each phase ends with something verifiable in CI or visible at `/dev/`.
 
-### Phase 0 — Toolchain migration *(highest risk)*
+### Phase 0 — Toolchain migration ✅ *done*
 
 Next.js static export, Tailwind, shadcn, and a deploy workflow that builds both
 branches with their own `basePath`.
@@ -493,6 +506,36 @@ branches with their own `basePath`.
   with `/Bike-Fitting-Tool/dev`, assemble one artifact.
 - shadcn initialised non-interactively; `components.json` committed.
 - **Exit:** both URLs serve a Next-rendered page; typecheck and build green.
+
+**What actually happened.** Next 16, React 19, Tailwind 4, shadcn/ui. Three
+things the plan did not anticipate:
+
+1. **Turbopack does not resolve `./x.js` to `./x.ts`.** The engine and domain
+   layers were written with NodeNext-style `.js` import extensions, which tsc and
+   Vitest both accept. Turbopack does not, so the extensions were dropped across
+   `src/`. This is correct anyway: the project uses `moduleResolution: "bundler"`,
+   under which extensionless imports are the convention and `.js` was never
+   required.
+
+2. **The dark theme is now a commitment, not a preference.** shadcn ships a
+   `.dark` class variant; the design tokens here were written against
+   `prefers-color-scheme`. Two mechanisms writing the same variables left roughly
+   thirty shadcn tokens (`primary`, `popover`, `ring`, …) stuck at their light
+   values in dark mode — visibly half-broken. Rather than duplicate the whole
+   token contract across three selectors, the app sets `class="dark"` on `<html>`
+   and runs one token set. A light theme returns in Phase 6 behind a theme
+   provider, which is where that belongs.
+
+3. **The deploy workflow has to survive the migration itself.** A push to
+   `develop` runs `develop`'s workflow, which also builds `main` — and `main` was
+   still plain static HTML. Each checkout is therefore detected independently:
+   a Next config means build, no Next config means publish an allow-list of
+   static files. The legacy branch of that function can be deleted once both
+   branches are Next apps.
+
+The Phase 0 page is not the product. It renders the calibration run **at build
+time** from `src/engine`, which proves the static export, the engine and the
+design tokens work together with no client-side maths and no server.
 
 ### Phase 1 — Engine *(no UI)*
 

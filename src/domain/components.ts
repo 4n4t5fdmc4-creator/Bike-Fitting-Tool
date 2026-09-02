@@ -6,7 +6,7 @@
  * produced arithmetic, not advice.
  */
 
-import type { Degrees, Grams, Millimeters, Sourced } from './units.js';
+import type { Degrees, Grams, Millimeters, Sourced } from './units';
 
 // --- Stem ------------------------------------------------------------------
 
@@ -115,7 +115,15 @@ export interface Saddle {
   readonly width: Millimeters;
   /**
    * Horizontal distance from the rail clamp centre to the 70 mm width point,
-   * positive forwards. 45-70 mm for short-nose models, 70-95 mm for classic.
+   * positive forwards. Roughly 35-50 mm on almost every road saddle, classic
+   * and short-nose alike - and that stability is the entire reason this is the
+   * reference point. The NOSE offset, by contrast, swings from ~115 mm on a
+   * short-nose saddle to ~140 mm on a classic one, which is why nose-referenced
+   * setback does not transfer between models.
+   *
+   * Note the consequence for units: setback measured to the width point runs
+   * around 145-220 mm from the BB, where the familiar nose-referenced figure is
+   * 50-95 mm. The two conventions must never be mixed.
    */
   readonly widthPointOffset: Sourced<Millimeters>;
   /** Rail top to saddle top surface at the reference point. ~35 mm typical. */
