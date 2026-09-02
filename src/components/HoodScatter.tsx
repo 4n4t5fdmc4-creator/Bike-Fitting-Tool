@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { makeProjection } from '@/lib/projection';
+import { makeProjection, withMinAspect } from '@/lib/projection';
 import { modelColorMap } from '@/lib/modelColors';
 import type { FitTolerance } from '@/lib/fitRadius';
 import type { FitMode } from '@/state/comparisonMode';
@@ -19,7 +19,9 @@ import type { FitMode } from '@/state/comparisonMode';
  */
 
 const PAD = 48;
-const PPMM = 3.6;
+const PPMM = 5.2;
+/** Minimum width-to-height of the plot box. See withMinAspect. */
+const MIN_ASPECT = 1.15;
 
 interface HoodPoint {
   id: string;
@@ -58,12 +60,12 @@ export function HoodScatter({
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     if (referenceMarker) { xs.push(referenceMarker.x); ys.push(referenceMarker.y); }
-    return {
+    return withMinAspect({
       minX: Math.min(...xs, win.left) - 8,
       maxX: Math.max(...xs, win.right) + 8,
       minY: Math.min(...ys, win.bottom) - 8,
       maxY: Math.max(...ys, win.top) + 8,
-    };
+    }, MIN_ASPECT);
   }, [points, referenceMarker, win.left, win.right, win.bottom, win.top]);
 
   const W = (bounds.maxX - bounds.minX) * PPMM + PAD * 2;
@@ -99,7 +101,7 @@ export function HoodScatter({
       <div className="overflow-x-auto">
         <svg viewBox={proj.viewBox} role="img"
           aria-label="Hood grip position, X against Y, both relative to the bottom bracket, with a target window around the reference"
-          className="mx-auto block w-full" style={{ minWidth: 480, maxHeight: 480 }}>
+          className="mx-auto block w-full" style={{ minWidth: 520, maxHeight: 760 }}>
           <title>Hood position with target window</title>
 
           <rect x={plotLeft} y={plotTop} width={plotRight - plotLeft} height={plotBottom - plotTop}

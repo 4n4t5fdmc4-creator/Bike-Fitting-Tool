@@ -11,6 +11,35 @@ export interface Projection {
   readonly viewBox: string;
 }
 
+export interface Bounds {
+  readonly minX: number;
+  readonly maxX: number;
+  readonly minY: number;
+  readonly maxY: number;
+}
+
+/**
+ * Widen whichever axis is the sliver until the box is at least `ratio` wide for
+ * its height, growing it symmetrically so nothing shifts off centre.
+ *
+ * Fit data is naturally portrait: a size run spans ~150 mm of stack but only
+ * ~90 mm of reach. Drawn at a uniform mm scale — which is not negotiable, a
+ * 10 mm move must read the same length on both axes — that produces a tall,
+ * narrow plot that can only ever occupy a third of a page-width container, with
+ * the dots stacked in a column and no room for their labels.
+ *
+ * Adding empty millimetres is the honest fix: the scale stays uniform, the
+ * axes stay true, and what changes is only how much blank space surrounds the
+ * data. Squashing the axes to fit the container would not be honest.
+ */
+export function withMinAspect(b: Bounds, ratio: number): Bounds {
+  const spanX = b.maxX - b.minX;
+  const spanY = b.maxY - b.minY;
+  if (spanX >= spanY * ratio) return b;
+  const grow = (spanY * ratio - spanX) / 2;
+  return { ...b, minX: b.minX - grow, maxX: b.maxX + grow };
+}
+
 export function makeProjection(
   bounds: { minX: number; maxX: number; minY: number; maxY: number },
   width: number,

@@ -308,6 +308,15 @@ body {
   .print-only {
     display: block;
   }
+  /* `display: block` on a table collapses its rows into a single column, and on
+     an inline note it forces a line break mid-sentence. Restore the display
+     each element actually needs. */
+  table.print-only {
+    display: table;
+  }
+  span.print-only {
+    display: inline;
+  }
   .printable {
     border: none !important;
   }

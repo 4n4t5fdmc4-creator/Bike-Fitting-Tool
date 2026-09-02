@@ -14,6 +14,8 @@ interface Props {
   usingExamples: boolean;
   frameCount: number;
   comparedCount: number;
+  /** Builds committed to the client record - what step 3 has to show. */
+  decisionCount: number;
 }
 
 interface Note {
@@ -24,7 +26,7 @@ interface Note {
 const MIN_FRAMES_TO_COMPARE = 4;
 
 export function StepIndicator({
-  hasReferenceBike, usingExamples, frameCount, comparedCount,
+  hasReferenceBike, usingExamples, frameCount, comparedCount, decisionCount,
 }: Props) {
   const notes: Note[] = [];
 
@@ -51,12 +53,19 @@ export function StepIndicator({
     notes.push({ tone: 'warn', text: 'pick at least two frames to compare' });
   }
 
+  // Nothing else is on file at the end of a session: the sliders and the
+  // selection are session state. Until a build is adopted, closing the tab
+  // loses the whole result.
+  if (decisionCount === 0 && !usingExamples && comparedCount >= 1) {
+    notes.push({ tone: 'warn', text: 'nothing recorded yet — adopt a build in Accufit to keep it' });
+  }
+
   if (notes.length === 0) {
     notes.push({
       tone: 'ok',
-      text: hasReferenceBike
-        ? `reference bike set · ${frameCount} frames loaded · ready to compare`
-        : `${frameCount} frames loaded · ready to compare`,
+      text: `${decisionCount} build${decisionCount === 1 ? '' : 's'} recorded${
+        hasReferenceBike ? ' · measured against the client’s own bike' : ''
+      }`,
     });
   }
 

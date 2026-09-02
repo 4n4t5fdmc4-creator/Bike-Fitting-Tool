@@ -16,7 +16,16 @@ import { create } from 'zustand';
  * Deliberately not persisted: it is a within-session selection, re-seeded from
  * the current recommendations when it is empty.
  */
-export const OVERLAY_CAP = 8;
+/**
+ * Four, not eight.
+ *
+ * Eight was a capability, not a use: with every size of every model offered as
+ * a chip, the overlay filled with bikes nobody was choosing between, and the
+ * one comparison that mattered was buried under seven that did not. A fitter
+ * decides between a handful of candidates — usually two sizes of two models —
+ * and the reference bike is drawn on top of that regardless.
+ */
+export const OVERLAY_CAP = 4;
 
 type Updater = ReadonlyArray<string> | ((prev: string[]) => string[]);
 

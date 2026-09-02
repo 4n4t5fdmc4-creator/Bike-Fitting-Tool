@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { makeProjection } from '@/lib/projection';
+import { makeProjection, withMinAspect } from '@/lib/projection';
 import { withinFitRadius, type FitTolerance } from '@/lib/fitRadius';
 import { modelColorMap } from '@/lib/modelColors';
 import type { MatrixRow } from './MatrixTab';
@@ -28,8 +28,10 @@ const PAD = 48;
  * relative size of text - the SVG itself scales to the container. Reach and
  * stack share it, so a 10 mm move reads the same length on either axis.
  */
-const PPMM = 3.6;
+const PPMM = 5.2;
 const ISOLINES = [1.4, 1.45, 1.5, 1.55, 1.6] as const;
+/** Minimum width-to-height of the plot box. See withMinAspect. */
+const MIN_ASPECT = 1.15;
 
 export function StackReachScatter({
   rows, reference, referenceLabel, tol, labelledIds, anchorIsEstimated,
@@ -53,12 +55,16 @@ export function StackReachScatter({
     const outerY = 2 * Math.max(tol.yl, tol.yh);
     const reaches = rows.map((r) => r.reach);
     const stacks = rows.map((r) => r.stack);
-    return {
+    const raw = {
       minX: Math.min(...reaches, reference.reach - outerX) - 8,
       maxX: Math.max(...reaches, reference.reach + outerX) + 8,
       minY: Math.min(...stacks, reference.stack - outerY) - 8,
       maxY: Math.max(...stacks, reference.stack + outerY) + 8,
     };
+    // A size run spans far more stack than reach; left as-is the plot is a
+    // portrait sliver that cannot fill a page-width container. Padding the
+    // reach axis keeps the mm scale uniform and buys room for the dot labels.
+    return withMinAspect(raw, MIN_ASPECT);
   }, [rows, reference, tol]);
 
   // Size the canvas to the data so the plot fills it - a fixed viewBox with a
@@ -113,7 +119,7 @@ export function StackReachScatter({
       <div className="overflow-x-auto">
         <svg viewBox={proj.viewBox} role="img"
           aria-label="Frame stack against frame reach, one point per size, with tolerance zones around the reference"
-          className="mx-auto block w-full" style={{ minWidth: 480, maxHeight: 480 }}>
+          className="mx-auto block w-full" style={{ minWidth: 520, maxHeight: 760 }}>
           <title>Stack / reach scatter with asymmetric tolerance zones</title>
 
           {/* plot frame + ticks */}
@@ -179,32 +185,59 @@ export function StackReachScatter({
             stroke="var(--text-2)" strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
           <path d={`M ${cx} ${cy - 6} L ${cx + 6} ${cy} L ${cx} ${cy + 6} L ${cx - 6} ${cy} Z`}
             fill="var(--panel)" stroke="var(--foreground)" strokeWidth={1.5} />
-          <text x={cx + 9} y={cy - 9} fontSize={10} fontWeight={600} fill="var(--foreground)"
-            stroke="var(--panel)" strokeWidth={3} paintOrder="stroke"
-            style={{ paintOrder: 'stroke' }}>
-            {referenceLabel}{anchorIsEstimated ? ' (est.)' : ''}
-          </text>
-
           {/* 4. one dot per size */}
           {rows.map((r) => {
             const inR = withinFitRadius(r.deltaReach, r.deltaStack, tol);
-            const col = colorOf(r.model);
-            const labelled = labelledIds.has(r.id);
             return (
-              <g key={r.id}>
-                <circle cx={x(r.reach)} cy={y(r.stack)} r={inR ? 4.5 : 3.5}
-                  fill={col} fillOpacity={inR ? 1 : 0.55}
-                  stroke="var(--panel)" strokeWidth={1} />
-                {labelled && (
-                  <text x={x(r.reach) + 7} y={y(r.stack) - 6} fontSize={10} fontWeight={600}
-                    fill="var(--foreground)" stroke="var(--panel)" strokeWidth={3}
-                    paintOrder="stroke" style={{ paintOrder: 'stroke' }}>
-                    {r.model} {r.size}
-                  </text>
-                )}
-              </g>
+              <circle key={r.id} cx={x(r.reach)} cy={y(r.stack)} r={inR ? 4.5 : 3.5}
+                fill={colorOf(r.model)} fillOpacity={inR ? 1 : 0.55}
+                stroke="var(--panel)" strokeWidth={1} />
             );
           })}
+
+          {/* 5. labels last, de-collided.
+              The frames worth labelling are the ones close to the reference,
+              which means they are close to each other - drawn at their dots the
+              names landed on top of one another and on the reference marker,
+              exactly where the plot has to be readable. Nudged apart vertically
+              with a leader back to the dot instead. */}
+          {(() => {
+            const labels = [
+              {
+                id: '__reference',
+                text: `${referenceLabel}${anchorIsEstimated ? ' (est.)' : ''}`,
+                px: cx, py: cy, bold: true,
+              },
+              ...rows
+                .filter((r) => labelledIds.has(r.id))
+                .map((r) => ({
+                  id: r.id,
+                  text: `${r.model} ${r.size}`,
+                  px: x(r.reach), py: y(r.stack), bold: false,
+                })),
+            ].sort((a, b) => a.py - b.py);
+
+            const GAP = 14;
+            let last = -Infinity;
+            return labels.map((l) => {
+              const ly = Math.max(l.py - 6, last + GAP);
+              last = ly;
+              const lx = l.px + 9;
+              return (
+                <g key={`lbl-${l.id}`}>
+                  {ly - (l.py - 6) > 2 && (
+                    <line x1={l.px} y1={l.py} x2={lx - 3} y2={ly - 3}
+                      stroke="var(--text-3)" strokeWidth={1} opacity={0.5} />
+                  )}
+                  <text x={lx} y={ly} fontSize={10} fontWeight={l.bold ? 700 : 600}
+                    fill="var(--foreground)" stroke="var(--panel)" strokeWidth={3}
+                    paintOrder="stroke" style={{ paintOrder: 'stroke' }}>
+                    {l.text}
+                  </text>
+                </g>
+              );
+            });
+          })()}
         </svg>
       </div>
 

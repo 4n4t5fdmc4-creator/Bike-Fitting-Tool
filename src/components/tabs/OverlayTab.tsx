@@ -1,34 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ModelRecommendation } from '@/engine/recommend';
 import type { FrameEvaluation } from '@/engine/score';
 import type { ReferenceBike } from '@/state/studio';
-import { useOverlaySelection } from '@/state/overlaySelection';
+import { OVERLAY_CAP, useOverlaySelection } from '@/state/overlaySelection';
 import { useComparisonMode } from '@/state/comparisonMode';
 import { Range, Segmented } from '../controls';
-import { FrameOverlay, type OverlayAlign, type OverlayCandidate } from '../FrameOverlay';
+import { FrameOverlay, type OverlayCandidate } from '../FrameOverlay';
 
 /**
  * Colour follows the entity, not its rank (docs/app-architecture.md 5.5): a
  * candidate keeps its slot for the session even if another is toggled off and
  * back on, rather than being reassigned by array position.
  *
- * Eight slots, not three. Slots 1-3 are validated all-pairs and separable by
- * colour alone; 4-8 lean on the direct label at each frame's head tube, which
- * the overlay always draws. See docs/app-architecture.md section 6.4.
+ * Four slots, all validated all-pairs, so colour alone separates them — the
+ * head-tube labels the overlay draws are then reinforcement rather than the
+ * only thing holding identity together.
  */
 const PALETTE = [
   'var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)',
-  'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)',
-];
-const CAP = PALETTE.length;
+].slice(0, OVERLAY_CAP);
 
 export function OverlayTab({
   models, referenceBike,
 }: { models: ReadonlyArray<ModelRecommendation>; referenceBike: ReferenceBike | null }) {
-  // The selection lives in a shared store so the Matrix scatter can label the
-  // same frames. Slot assignment stays local - it is only a drawing concern.
+  // The selection lives in a shared store so the Matrix scatter and the Accufit
+  // tables work on the same frames. Slot assignment stays local - drawing only.
   const selected = useOverlaySelection((s) => s.selectedIds);
   const setSelected = useOverlaySelection((s) => s.setSelectedIds);
   const [slotOf, setSlotOf] = useState<Record<string, number>>({});
@@ -44,7 +42,7 @@ export function OverlayTab({
       const next = { ...prev };
       for (const id of missing) {
         const used = new Set(Object.values(next));
-        next[id] = Array.from({ length: CAP }, (_, i) => i).find((sl) => !used.has(sl)) ?? 0;
+        next[id] = Array.from({ length: OVERLAY_CAP }, (_, i) => i).find((sl) => !used.has(sl)) ?? 0;
       }
       return next;
     });
@@ -57,8 +55,6 @@ export function OverlayTab({
   const cockpit = useComparisonMode((s) => s.cockpit);
   const setCockpit = useComparisonMode((s) => s.setCockpit);
   const seedCockpit = useComparisonMode((s) => s.seedCockpit);
-
-  const [align, setAlign] = useState<OverlayAlign>('bb');
 
   // Seed the shared cockpit from the reference bike (the position the fit was
   // measured at). Re-seeds on a client switch, leaves it alone once adjusted.
@@ -78,12 +74,15 @@ export function OverlayTab({
   const toggle = (id: string) => {
     setSelected((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= CAP) return prev;
+      if (prev.length >= OVERLAY_CAP) return prev;
       return [...prev, id];
     });
   };
 
-  const bySize = models.flatMap((m) => m.allSizes.map((s) => ({ model: m.model, ...s })));
+  const bySize = useMemo(
+    () => models.flatMap((m) => m.allSizes.map((s) => ({ model: m.model, ...s }))),
+    [models],
+  );
 
   // The bar the fit was measured on, carried onto every frame - a fit moves
   // between frames with its handlebar. Defaults where no reference bike is set.
@@ -108,29 +107,30 @@ export function OverlayTab({
     spacerStack: cockpit.spacerHeight, barReach: cockpit.barReach, barRise: cockpit.barRise,
   };
 
-  const candidates: OverlayCandidate[] = selected
+  const chosen = selected
     .map((id) => bySize.find((s) => s.frame.id === id))
-    .filter((s): s is NonNullable<typeof s> => s !== undefined)
-    .map((s) => ({
-      id: s.frame.id,
-      label: `${s.model} ${s.frame.size}`,
-      color: PALETTE[slotOf[s.frame.id] ?? 0] ?? PALETTE[0]!,
-      frame: {
-        stack: s.frame.stack, reach: s.frame.reach, headTubeAngle: s.frame.headTubeAngle,
-        // Real value when the source data has it (all current sources do);
-        // 73.5 is a last-resort fallback for a future source that lacks it.
-        seatTubeAngle: s.frame.seatTubeAngle ?? 73.5,
-        ...(s.frame.headTubeLength !== undefined ? { headTubeLength: s.frame.headTubeLength } : {}),
-        ...(s.frame.chainstay !== undefined ? { chainstay: s.frame.chainstay } : {}),
-        ...(s.frame.effectiveTopTube !== undefined ? { effectiveTopTube: s.frame.effectiveTopTube } : {}),
-        ...(s.frame.wheelbase !== undefined ? { wheelbase: s.frame.wheelbase } : {}),
-        ...(s.frame.bbDrop !== undefined ? { bbDrop: s.frame.bbDrop } : {}),
-        ...(s.frame.tyreMax !== undefined ? { tyreMax: s.frame.tyreMax } : {}),
-        // The cockpit is the toggle: each frame's own recommended build, or the
-        // one shared cockpit currently on the sliders.
-        ...(fitMode === 'same-cockpit' ? sharedCockpit : requiredBuild(s.evaluation)),
-      },
-    }));
+    .filter((s): s is NonNullable<typeof s> => s !== undefined);
+
+  const candidates: OverlayCandidate[] = chosen.map((s) => ({
+    id: s.frame.id,
+    label: `${s.model} ${s.frame.size}`,
+    color: PALETTE[slotOf[s.frame.id] ?? 0] ?? PALETTE[0]!,
+    frame: {
+      stack: s.frame.stack, reach: s.frame.reach, headTubeAngle: s.frame.headTubeAngle,
+      // Real value when the source data has it (all current sources do);
+      // 73.5 is a last-resort fallback for a future source that lacks it.
+      seatTubeAngle: s.frame.seatTubeAngle ?? 73.5,
+      ...(s.frame.headTubeLength !== undefined ? { headTubeLength: s.frame.headTubeLength } : {}),
+      ...(s.frame.chainstay !== undefined ? { chainstay: s.frame.chainstay } : {}),
+      ...(s.frame.effectiveTopTube !== undefined ? { effectiveTopTube: s.frame.effectiveTopTube } : {}),
+      ...(s.frame.wheelbase !== undefined ? { wheelbase: s.frame.wheelbase } : {}),
+      ...(s.frame.bbDrop !== undefined ? { bbDrop: s.frame.bbDrop } : {}),
+      ...(s.frame.tyreMax !== undefined ? { tyreMax: s.frame.tyreMax } : {}),
+      // The cockpit is the toggle: each frame's own recommended build, or the
+      // one shared cockpit currently on the sliders.
+      ...(fitMode === 'same-cockpit' ? sharedCockpit : requiredBuild(s.evaluation)),
+    },
+  }));
 
   if (referenceBike) {
     // The reference keeps its real, measured cockpit under both modes - it is
@@ -150,24 +150,20 @@ export function OverlayTab({
     });
   }
 
-  const chips = [...bySize].sort(
-    (a, b) => a.model.localeCompare(b.model) || sizeValue(a.frame.size) - sizeValue(b.frame.size),
-  );
-
   return (
     <div className="space-y-4">
       <div className="rounded-[10px] border border-[var(--border)] bg-[var(--panel)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--text-3)]">
-              Overlay up to eight frames
+              Frames side by side
             </h3>
-            <p className="mt-1 text-xs text-[var(--text-3)]">
-              Three colours are cleanly distinguishable; past that, each frame is named at its head
-              tube, so identity never rests on colour alone.
+            <p className="mt-1 max-w-xl text-xs text-[var(--text-3)]">
+              Up to {OVERLAY_CAP} candidates at once, plus the client’s own bike drawn dashed
+              underneath. Every bottom bracket sits at the same point.
             </p>
           </div>
-          <div className="no-print flex flex-col gap-2">
+          <div className="no-print">
             <Segmented
               value={fitMode}
               onChange={setFitMode}
@@ -176,24 +172,13 @@ export function OverlayTab({
                 { value: 'same-cockpit', label: 'Same cockpit' },
               ]}
             />
-            <Segmented
-              value={align}
-              onChange={setAlign}
-              options={[
-                { value: 'bb', label: 'Align at BB' },
-                { value: 'hoods', label: 'Align at hoods' },
-              ]}
-            />
           </div>
         </div>
 
         <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-3)]">
           {fitMode === 'as-fitted'
-            ? 'As fitted: each bike drawn with its own recommended build, so finished bikes are compared. '
-            : 'Same cockpit: every bike gets the cockpit on the sliders below, so only the frames differ. '}
-          {align === 'hoods'
-            ? 'Aligned at the hoods — same hand position, different bike.'
-            : 'Aligned at the bottom bracket — raw frame reach and stack.'}
+            ? 'As fitted: each bike carries the build the solver says it needs to hit the target — so what you compare is four finished bikes, not four frames. The sliders play no part in this mode.'
+            : 'Same cockpit: every bike gets the one cockpit on the sliders below, so the only thing that differs between the drawings is the frame itself.'}
         </p>
 
         {fitMode === 'same-cockpit' && (
@@ -206,39 +191,138 @@ export function OverlayTab({
           </div>
         )}
 
-        <div className="no-print mt-3 flex flex-wrap gap-1.5">
-          {chips.map((s) => {
-            const id = s.frame.id;
-            const isOn = selected.includes(id);
-            const color = isOn ? (PALETTE[slotOf[id] ?? 0] ?? PALETTE[0]!) : undefined;
-            return (
-              <button
-                key={id}
-                onClick={() => toggle(id)}
-                disabled={!isOn && selected.length >= CAP}
-                className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-30"
-                style={{ borderColor: isOn ? color : 'var(--border)' }}
-              >
-                {isOn && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
-                <span>{s.model} {s.frame.size}</span>
-                {isOn && (
-                  <span className="tabular text-[var(--text-3)]">
-                    {buildLabel(requiredBuild(s.evaluation))}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+        <FramePicker
+          models={models}
+          selected={selected}
+          slotOf={slotOf}
+          onToggle={toggle}
+          label={(e) => buildLabel(requiredBuild(e))}
+        />
       </div>
 
-      <FrameOverlay candidates={candidates} align={align} />
+      <FrameOverlay candidates={candidates} />
+
+      {/* The chips carry the required build on screen, and the chips are not
+          printed. Without this the printout showed a drawing and four names -
+          everything the client needed to take to a shop was missing. */}
+      {chosen.length > 0 && (
+        <table className="print-only w-full text-xs">
+          <thead>
+            <tr className="border-b border-[var(--border)] text-left">
+              <th className="py-1 pr-3 font-medium">Frame</th>
+              <th className="py-1 pr-3 font-medium">Stem</th>
+              <th className="py-1 pr-3 font-medium">Angle</th>
+              <th className="py-1 pr-3 font-medium">Spacers</th>
+              <th className="py-1 pr-3 font-medium">Bar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chosen.map((s) => {
+              const b = fitMode === 'same-cockpit' ? sharedCockpit : requiredBuild(s.evaluation);
+              return (
+                <tr key={s.frame.id} className="border-b border-[var(--border)]/50">
+                  <td className="py-1 pr-3">{s.model} {s.frame.size}</td>
+                  <td className="tabular py-1 pr-3">{b.stemLength} mm</td>
+                  <td className="tabular py-1 pr-3">{b.stemAngle > 0 ? '+' : ''}{b.stemAngle}°</td>
+                  <td className="tabular py-1 pr-3">{b.spacerStack} mm</td>
+                  <td className="tabular py-1 pr-3">{b.barReach}×{b.barRise}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
-/** Numeric lead of a size label ("56", "550", "XS" -> 0) for a stable chip order. */
-function sizeValue(size: string): number {
-  const n = parseFloat(size);
-  return Number.isFinite(n) ? n : 0;
+/**
+ * One chip per MODEL, showing its recommended size — not one chip per size of
+ * every model.
+ *
+ * The flat list offered forty-odd chips, which is every row of every geometry
+ * table the fitter had pasted. That is the raw data, not a choice: nobody is
+ * deciding between a 47 and a 61. The recommended size is the chip; the other
+ * sizes are one click away per model, because the genuinely useful comparison —
+ * two adjacent sizes of the same bike — still has to be reachable.
+ */
+function FramePicker({
+  models, selected, slotOf, onToggle, label,
+}: {
+  models: ReadonlyArray<ModelRecommendation>;
+  selected: ReadonlyArray<string>;
+  slotOf: Record<string, number>;
+  onToggle: (id: string) => void;
+  label: (e: FrameEvaluation) => string;
+}) {
+  const [openModel, setOpenModel] = useState<string | null>(null);
+  const full = selected.length >= OVERLAY_CAP;
+
+  const chip = (
+    id: string, name: string, sub: string | null, isRecommended: boolean,
+  ) => {
+    const isOn = selected.includes(id);
+    const color = isOn ? (PALETTE[slotOf[id] ?? 0] ?? PALETTE[0]!) : undefined;
+    return (
+      <button
+        key={id}
+        onClick={() => onToggle(id)}
+        disabled={!isOn && full}
+        title={!isOn && full ? `Deselect one first — ${OVERLAY_CAP} at a time` : undefined}
+        className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs disabled:opacity-30"
+        style={{ borderColor: isOn ? color : 'var(--border)' }}
+      >
+        {isOn && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
+        <span className={isRecommended ? 'font-medium' : undefined}>{name}</span>
+        {sub && <span className="tabular text-[var(--text-3)]">{sub}</span>}
+      </button>
+    );
+  };
+
+  return (
+    <div className="no-print mt-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] text-[var(--text-3)]">
+          Recommended size per model. {selected.length} of {OVERLAY_CAP} slots used.
+        </span>
+      </div>
+
+      {models.map((m) => {
+        const open = openModel === m.model;
+        const others = m.allSizes.filter((s) => s.frame.id !== m.best.frame.id);
+        return (
+          <div key={m.model} className="flex flex-wrap items-center gap-1.5">
+            {chip(
+              m.best.frame.id,
+              `${m.model} ${m.best.frame.size}`,
+              selected.includes(m.best.frame.id) ? label(m.best.evaluation) : null,
+              true,
+            )}
+            {m.closeCall && m.alternative && (
+              <span className="text-[11px] text-[var(--text-3)]">
+                close call with {m.alternative.frame.size}
+              </span>
+            )}
+            {others.length > 0 && (
+              <button
+                onClick={() => setOpenModel(open ? null : m.model)}
+                className="rounded-md px-1.5 py-1 text-[11px] text-[var(--text-3)] hover:text-[var(--text-2)]"
+              >
+                {open ? '− other sizes' : `+ ${others.length} other size${others.length === 1 ? '' : 's'}`}
+              </button>
+            )}
+            {open &&
+              others.map((s) =>
+                chip(
+                  s.frame.id,
+                  s.frame.size,
+                  selected.includes(s.frame.id) ? label(s.evaluation) : null,
+                  false,
+                ),
+              )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
