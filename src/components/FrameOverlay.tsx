@@ -3,9 +3,7 @@
 import { deg, mm } from '@/domain/units';
 import { frameOutline, outlineBounds, type FrameOutline, type OutlinePoint } from '@/engine/outline';
 import { makeProjection } from '@/lib/projection';
-
-/** How the frames are registered against one another. */
-export type OverlayAlign = 'bb' | 'hoods';
+import { Explainer } from './controls';
 
 export interface OverlayCandidate {
   readonly id: string;
@@ -23,7 +21,7 @@ export interface OverlayCandidate {
 }
 
 const W = 820;
-const H = 380;
+const H = 430;
 
 /**
  * Frames superimposed to scale.
@@ -32,21 +30,20 @@ const H = 380;
  * reads as a bicycle: closed front triangle, horizontal top tube, both wheels
  * on a common ground line. See engine/outline.ts for the geometry.
  *
- * Up to eight frames at once (docs/app-architecture.md section 6.4). Colour
- * separates the first three cleanly; past that, the direct label at every
- * frame's head tube is what carries identity and colour only assists.
+ * Colour separates the first three frames cleanly; past that, the direct label
+ * at every frame's head tube is what carries identity and colour only assists.
  *
- * Two registrations, chosen by the caller:
- *  - `bb`    — every bottom bracket at the origin: compares raw frame reach and stack.
- *  - `hoods` — every hood grip at one point: "same hand position, different bike",
- *              so the frames fan out behind a shared grip.
+ * Every bottom bracket sits at the origin. There was briefly a second
+ * registration that stacked all the hood grips on one point instead — it drew
+ * a tidy fan, but a bicycle whose bottom bracket is not where the rider's feet
+ * are is not a bicycle, and nothing in the drawing could then be measured. The
+ * "same hands, different bike" question it was meant to answer is answered
+ * properly by the Accufit view, in millimetres.
  */
 export function FrameOverlay({
   candidates,
-  align = 'bb',
 }: {
   candidates: ReadonlyArray<OverlayCandidate>;
-  align?: OverlayAlign;
 }) {
   const outlines: Array<{ c: OverlayCandidate; o: FrameOutline }> = candidates.map((c) => ({
     c,
@@ -72,28 +69,12 @@ export function FrameOverlay({
   if (outlines.length === 0) {
     return (
       <p className="rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--panel)] px-4 py-8 text-center text-sm text-[var(--text-3)]">
-        Pick frames below to overlay them — up to eight.
+        Pick frames below to overlay them.
       </p>
     );
   }
 
-  // The grip every frame is registered to under "hoods". Prefer the reference
-  // frame's hood, so promoting a different reference re-centres the fan.
-  const anchor = (outlines.find((x) => x.c.isReference) ?? outlines[0]!).o.hood;
-  const offsetOf = (o: FrameOutline) =>
-    align === 'hoods'
-      ? { x: anchor.x - o.hood.x, y: anchor.y - o.hood.y }
-      : { x: 0, y: 0 };
-
-  const placed = outlines.map((x) => ({ ...x, off: offsetOf(x.o) }));
-
-  // Bounds have to be taken after the per-frame shift, so hood-aligned frames
-  // that sit well behind the origin still fit. outlineBounds handles the BB
-  // case; the shifted case is inlined here on the same point set.
-  const frameBounds =
-    align === 'bb'
-      ? outlineBounds(placed.map((x) => x.o))
-      : shiftedBounds(placed);
+  const frameBounds = outlineBounds(outlines.map((x) => x.o));
   // Reserve a right-hand gutter for the head-tube label column, so the frames
   // draw into the left of the canvas and the labels never clip the edge.
   const gutter = (frameBounds.maxX - frameBounds.minX) * 0.3;
@@ -105,16 +86,12 @@ export function FrameOverlay({
     <div>
       <div className="overflow-x-auto rounded-[10px] border border-[var(--border)] bg-[var(--panel)] p-2">
         <svg viewBox={proj.viewBox} role="img" aria-label="Frame overlay" className="mx-auto block w-full"
-          style={{ minWidth: 520, maxHeight: 460 }}>
-          <title>
-            {align === 'hoods'
-              ? 'Frame geometries registered at a shared hood position'
-              : 'Frame geometries superimposed at the bottom bracket'}
-          </title>
+          style={{ minWidth: 560, maxHeight: 620 }}>
+          <title>Frame geometries superimposed at the bottom bracket</title>
 
-          {placed.map(({ c, o, off }) => {
-            const X = (p: OutlinePoint) => proj.toSvgX(p.x + off.x);
-            const Y = (p: OutlinePoint) => proj.toSvgY(p.y + off.y);
+          {outlines.map(({ c, o }) => {
+            const X = (p: OutlinePoint) => proj.toSvgX(p.x);
+            const Y = (p: OutlinePoint) => proj.toSvgY(p.y);
             const line = (
               a: OutlinePoint, b: OutlinePoint,
               opts: { w?: number; dash?: boolean } = {},
@@ -162,10 +139,10 @@ export function FrameOverlay({
               a tidy right-hand column, each with a leader back to its head
               tube, so eight stay legible even when the head tubes bunch up. */}
           {(() => {
-            const heads = placed.map((p) => ({
+            const heads = outlines.map((p) => ({
               c: p.c,
-              hx: proj.toSvgX(p.o.htTop.x + p.off.x),
-              hy: proj.toSvgY(p.o.htTop.y + p.off.y),
+              hx: proj.toSvgX(p.o.htTop.x),
+              hy: proj.toSvgY(p.o.htTop.y),
             }));
             const step = 15;
             const top = Math.max(
@@ -198,7 +175,7 @@ export function FrameOverlay({
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-        {placed.map(({ c, o }) => (
+        {outlines.map(({ c, o }) => (
           <span key={c.id} className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full" style={{ background: c.color }} />
             {c.label}
@@ -208,31 +185,18 @@ export function FrameOverlay({
         ))}
       </div>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-3)]">
-        {align === 'hoods'
-          ? 'Every hood grip is drawn at the same point; the frames fan out behind it, so the tubes show what moves when the hand position is held fixed. '
-          : 'Every bottom bracket is at the same point. '}
-        Head tube position and angle are exact, from stack, reach and head tube angle. The dashed
-        top tube, the cockpit and the wheels use typical road-bike values where the entered geometry
-        does not include effective top tube, chainstay, wheelbase or tyre clearance — this is a rough
-        visual comparison, not a scale drawing.
-        {someInexact && ' Frames marked "schematic" are missing effective top tube, head tube length or chainstay in their data.'}
-      </p>
+      <div className="mt-2">
+        <Explainer title="How exact is this drawing?" storageKey="overlay-drawing-caveats">
+          <p className="text-[11px] leading-relaxed text-[var(--text-3)]">
+            Every bottom bracket is at the same point. Head tube position and angle are exact, from
+            stack, reach and head tube angle. The dashed top tube, the cockpit and the wheels use
+            typical road-bike values where the entered geometry does not include effective top tube,
+            chainstay, wheelbase or tyre clearance — this is a rough visual comparison, not a scale
+            drawing.
+            {someInexact && ' Frames marked "schematic" are missing effective top tube, head tube length or chainstay in their data.'}
+          </p>
+        </Explainer>
+      </div>
     </div>
   );
-}
-
-/** outlineBounds, but over points already shifted by each frame's offset. */
-function shiftedBounds(
-  placed: ReadonlyArray<{ o: FrameOutline; off: { x: number; y: number } }>,
-): { minX: number; maxX: number; minY: number; maxY: number } {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const { o, off } of placed) {
-    const r = o.wheelRadius;
-    const xs = [o.rear.x - r, o.front.x + r, o.spTop.x, o.htTop.x, o.stTop.x, o.hood.x, o.clamp.x];
-    const ys = [o.rear.y - r, o.front.y - r, o.spTop.y + 40, o.htTop.y, o.hood.y, o.spacer.y];
-    for (const x of xs) { minX = Math.min(minX, x + off.x); maxX = Math.max(maxX, x + off.x); }
-    for (const y of ys) { minY = Math.min(minY, y + off.y); maxY = Math.max(maxY, y + off.y); }
-  }
-  return { minX, maxX, minY, maxY };
 }

@@ -79,6 +79,43 @@ export interface ReferenceBike {
   barId: string;
 }
 
+/**
+ * A build the fitter has committed to: this frame, with this cockpit, missing
+ * the target by this much.
+ *
+ * Sliders are for exploring; this is the output. Until it existed, a session
+ * ended with the right answer on screen and nothing on file - the fitter could
+ * say "the Infinito 550 works with a -6 stem and 20 mm" and have no way to keep
+ * it, hand it over, or come back to it a week later.
+ *
+ * Every number is stored, not re-derived. A frame can be edited or deleted
+ * after the fact, and a decision that silently changed when its frame changed
+ * would be worse than no record at all.
+ */
+export interface FitDecision {
+  id: string;
+  /** The frame this came from. May no longer exist; `label` is what survives. */
+  frameId: string;
+  label: string;
+  stemLength: number;
+  stemAngle: number;
+  spacerHeight: number;
+  barReach: number;
+  barRise: number;
+  /** Hood grip this build produces, BB-relative. */
+  hoodX: number;
+  hoodY: number;
+  /** Accufit point - BB centre to bar clamp centre - for the manufacturer's table. */
+  clampX: number;
+  clampY: number;
+  /** Signed miss against the target at the hoods, mm. */
+  deltaX: number;
+  deltaY: number;
+  /** Free text: why this one, what to watch, what was ruled out. */
+  note: string;
+  decidedAt: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -89,9 +126,19 @@ export interface Client {
   referenceBike: ReferenceBike | null;
   /** Which one the recommendations run against. */
   targetMode: 'derived' | 'reference';
+  /**
+   * Committed builds, newest last. Optional on the type because records saved
+   * before decisions existed are still in browsers; read it through
+   * {@link decisionsOf}, never directly.
+   */
+  decisions?: FitDecision[] | undefined;
   createdAt: string;
   updatedAt: string;
 }
+
+/** The decisions on a client, tolerating records written before they existed. */
+export const decisionsOf = (c: Client | null): ReadonlyArray<FitDecision> =>
+  c?.decisions ?? [];
 
 export interface Studio {
   name: string;
@@ -159,6 +206,10 @@ interface StudioState {
   removeClient: (id: string) => void;
   selectClient: (id: string | null) => void;
 
+  addDecision: (clientId: string, d: Omit<FitDecision, 'id' | 'decidedAt'>) => void;
+  updateDecision: (clientId: string, decisionId: string, patch: Partial<FitDecision>) => void;
+  removeDecision: (clientId: string, decisionId: string) => void;
+
   exportAll: () => ExportBundle;
   exportClient: (id: string) => ExportBundle | null;
   importBundle: (bundle: unknown, mode: 'merge' | 'replace') => { added: number; error?: string };
@@ -209,6 +260,7 @@ export const useStudio = create<StudioState>()(
           measurements: { ...DEFAULT_MEASUREMENTS },
           referenceBike: null,
           targetMode: 'derived',
+          decisions: [],
           createdAt: now(),
           updatedAt: now(),
         };
@@ -239,6 +291,50 @@ export const useStudio = create<StudioState>()(
         })),
 
       selectClient: (id) => set({ activeClientId: id }),
+
+      addDecision: (clientId, d) =>
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? {
+                  ...c,
+                  decisions: [
+                    ...(c.decisions ?? []),
+                    { ...d, id: newId(), decidedAt: now() },
+                  ],
+                  updatedAt: now(),
+                }
+              : c,
+          ),
+        })),
+
+      updateDecision: (clientId, decisionId, patch) =>
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? {
+                  ...c,
+                  decisions: (c.decisions ?? []).map((d) =>
+                    d.id === decisionId ? { ...d, ...patch, id: d.id } : d,
+                  ),
+                  updatedAt: now(),
+                }
+              : c,
+          ),
+        })),
+
+      removeDecision: (clientId, decisionId) =>
+        set((s) => ({
+          clients: s.clients.map((c) =>
+            c.id === clientId
+              ? {
+                  ...c,
+                  decisions: (c.decisions ?? []).filter((d) => d.id !== decisionId),
+                  updatedAt: now(),
+                }
+              : c,
+          ),
+        })),
 
       exportAll: () => ({
         format: 'bike-fitting-tool',

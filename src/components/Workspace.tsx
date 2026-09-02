@@ -8,16 +8,18 @@ import { resolveCockpit } from '@/engine/assumptions';
 import { recommendByModel, type CandidateFrame } from '@/engine/recommend';
 import { virtualFrameStackReach } from '@/engine/virtualFrame';
 import { FRAME_LIBRARY } from '@/data/frames';
-import { useStudio } from '@/state/studio';
+import { decisionsOf, useStudio } from '@/state/studio';
 import { useActiveTab } from '@/state/activeTab';
 import { useOverlaySelection } from '@/state/overlaySelection';
-import { TabNav, type TabId } from './tabs/TabNav';
+import { TabNav, stepOf, type TabId } from './tabs/TabNav';
 import { StepIndicator } from './StepIndicator';
 import { ProfileTab } from './tabs/ProfileTab';
 import { BikesTab } from './tabs/BikesTab';
 import { OverlayTab } from './tabs/OverlayTab';
 import { CockpitTab } from './tabs/CockpitTab';
 import { MatrixTabWrapper } from './tabs/MatrixTabWrapper';
+import { ReportTab } from './tabs/ReportTab';
+import { AccufitPanel } from './AccufitPanel';
 
 /**
  * Both frame sources - the fitter's stored frames and the built-in library -
@@ -209,20 +211,36 @@ export function Workspace() {
     );
   }
 
-  const printable = tab === 'overlay' || tab === 'matrix';
+  // Views that make sense on paper. Report is the one a client is handed;
+  // Overlay, Accufit and Matrix are the working sheets behind it.
+  const PRINT_TITLES: Partial<Record<TabId, string>> = {
+    overlay: 'Frame comparison',
+    accufit: 'Buildable configurations',
+    matrix: 'Fit matrix',
+    report: 'Fit report',
+  };
+  const printTitle = PRINT_TITLES[tab];
+  const printable = printTitle !== undefined;
 
   return (
     <>
       <TabNav active={tab} onChange={setTab} />
 
-      <div className="no-print mx-auto max-w-6xl px-4 pt-3">
-        <StepIndicator
-          hasReferenceBike={hasReferenceBike}
-          usingExamples={usingExamples}
-          frameCount={models.length}
-          comparedCount={comparedCount}
-        />
-      </div>
+      {/* Not on the Report: that view carries its own, better-placed warning
+          about an estimated target, and a client is looking at the screen. */}
+      {stepOf(tab) !== 'report' && (
+        <div className="no-print mx-auto max-w-6xl px-4 pt-3 empty:hidden">
+          <StepIndicator
+            hasReferenceBike={hasReferenceBike}
+            usingExamples={usingExamples}
+            frameCount={models.length}
+            comparedCount={comparedCount}
+            decisionCount={decisionsOf(client).length}
+            showSummary={stepOf(tab) === 'client'}
+            onGoto={setTab}
+          />
+        </div>
+      )}
 
       <div className={`mx-auto max-w-6xl px-4 py-6 ${printable ? 'printable' : ''}`}>
         {printable && (
@@ -238,7 +256,7 @@ export function Workspace() {
             <PrintHeader
               studioName={studio.name}
               clientName={client.name}
-              view={tab === 'overlay' ? 'Frame comparison' : 'Fit matrix'}
+              view={printTitle}
               referenceLabel={referenceLabel}
             />
           </>
@@ -266,6 +284,23 @@ export function Workspace() {
             models={models}
             target={target?.grip ?? null}
             referenceBike={client.targetMode === 'reference' ? client.referenceBike : null}
+          />
+        )}
+
+        {tab === 'accufit' && (
+          <AccufitPanel
+            models={models}
+            target={target?.grip ?? null}
+            referenceBike={client.targetMode === 'reference' ? client.referenceBike : null}
+            clientId={client.id}
+          />
+        )}
+
+        {tab === 'report' && (
+          <ReportTab
+            client={client}
+            target={target?.grip ?? null}
+            referenceLabel={referenceLabel}
           />
         )}
 

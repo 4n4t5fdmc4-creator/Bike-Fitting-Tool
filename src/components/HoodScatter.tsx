@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { makeProjection } from '@/lib/projection';
+import { makeProjection, withMinAspect } from '@/lib/projection';
 import { modelColorMap } from '@/lib/modelColors';
 import type { FitTolerance } from '@/lib/fitRadius';
 import type { FitMode } from '@/state/comparisonMode';
@@ -19,7 +19,9 @@ import type { FitMode } from '@/state/comparisonMode';
  */
 
 const PAD = 48;
-const PPMM = 3.6;
+const PPMM = 5.2;
+/** Minimum width-to-height of the plot box. See withMinAspect. */
+const MIN_ASPECT = 1.15;
 
 interface HoodPoint {
   id: string;
@@ -58,12 +60,12 @@ export function HoodScatter({
     const xs = points.map((p) => p.x);
     const ys = points.map((p) => p.y);
     if (referenceMarker) { xs.push(referenceMarker.x); ys.push(referenceMarker.y); }
-    return {
+    return withMinAspect({
       minX: Math.min(...xs, win.left) - 8,
       maxX: Math.max(...xs, win.right) + 8,
       minY: Math.min(...ys, win.bottom) - 8,
       maxY: Math.max(...ys, win.top) + 8,
-    };
+    }, MIN_ASPECT);
   }, [points, referenceMarker, win.left, win.right, win.bottom, win.top]);
 
   const W = (bounds.maxX - bounds.minX) * PPMM + PAD * 2;
@@ -99,7 +101,7 @@ export function HoodScatter({
       <div className="overflow-x-auto">
         <svg viewBox={proj.viewBox} role="img"
           aria-label="Hood grip position, X against Y, both relative to the bottom bracket, with a target window around the reference"
-          className="mx-auto block w-full" style={{ minWidth: 480, maxHeight: 480 }}>
+          className="mx-auto block w-full" style={{ minWidth: 520, maxHeight: 760 }}>
           <title>Hood position with target window</title>
 
           <rect x={plotLeft} y={plotTop} width={plotRight - plotLeft} height={plotBottom - plotTop}
@@ -177,23 +179,37 @@ export function HoodScatter({
         </svg>
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-[var(--text-3)]">
-        {models.map((m) => (
-          <span key={m} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
-            {m}
+      {/* Grouped like the stack/reach legend: model identity and the tolerance
+          window are different kinds of thing and must not look alike. */}
+      <div className="mt-1 flex flex-wrap items-start gap-x-6 gap-y-2 px-1 text-[11px] text-[var(--text-3)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Models</span>
+          {models.map((m) => (
+            <span key={m} className="flex items-center gap-1.5 text-[var(--text-2)]">
+              <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
+              {m}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Around the target</span>
+          <span className="flex items-center gap-1.5 text-[var(--text-2)]">
+            <span
+              className="h-2.5 w-4 rounded-[2px] border"
+              style={{
+                background: 'color-mix(in srgb, var(--status-good) 26%, transparent)',
+                borderColor: 'var(--status-good)',
+              }}
+            />
+            target window
           </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 rounded-sm" style={{ background: 'var(--status-good)', opacity: 0.4 }} />
-          target window
-        </span>
-        <span>
-          {mode === 'as-fitted'
-            ? 'each bike built to its own target'
-            : 'every bike on the shared cockpit'}
-          {anchorIsEstimated ? ' · window around an estimated position' : ''}
-        </span>
+          <span>
+            {mode === 'as-fitted'
+              ? 'each bike built to its own target'
+              : 'every bike on the shared cockpit'}
+            {anchorIsEstimated ? ' · window around an estimated position' : ''}
+          </span>
+        </div>
       </div>
     </div>
   );
