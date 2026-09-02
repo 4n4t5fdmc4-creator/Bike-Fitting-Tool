@@ -11,7 +11,7 @@ import { FRAME_LIBRARY } from '@/data/frames';
 import { decisionsOf, useStudio } from '@/state/studio';
 import { useActiveTab } from '@/state/activeTab';
 import { useOverlaySelection } from '@/state/overlaySelection';
-import { TabNav, type TabId } from './tabs/TabNav';
+import { TabNav, stepOf, type TabId } from './tabs/TabNav';
 import { StepIndicator } from './StepIndicator';
 import { ProfileTab } from './tabs/ProfileTab';
 import { BikesTab } from './tabs/BikesTab';
@@ -226,15 +226,21 @@ export function Workspace() {
     <>
       <TabNav active={tab} onChange={setTab} />
 
-      <div className="no-print mx-auto max-w-6xl px-4 pt-3">
-        <StepIndicator
-          hasReferenceBike={hasReferenceBike}
-          usingExamples={usingExamples}
-          frameCount={models.length}
-          comparedCount={comparedCount}
-          decisionCount={decisionsOf(client).length}
-        />
-      </div>
+      {/* Not on the Report: that view carries its own, better-placed warning
+          about an estimated target, and a client is looking at the screen. */}
+      {stepOf(tab) !== 'report' && (
+        <div className="no-print mx-auto max-w-6xl px-4 pt-3 empty:hidden">
+          <StepIndicator
+            hasReferenceBike={hasReferenceBike}
+            usingExamples={usingExamples}
+            frameCount={models.length}
+            comparedCount={comparedCount}
+            decisionCount={decisionsOf(client).length}
+            showSummary={stepOf(tab) === 'client'}
+            onGoto={setTab}
+          />
+        </div>
+      )}
 
       <div className={`mx-auto max-w-6xl px-4 py-6 ${printable ? 'printable' : ''}`}>
         {printable && (

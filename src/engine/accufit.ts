@@ -119,14 +119,44 @@ export function accufitOptions(
     }
   }
 
-  // Ties broken towards the plainer build: fewer spacers, then a shorter stem.
-  // Two rows that land in the same millimetre are the same fit, so the one that
-  // looks like a stock bike should win.
-  return out.sort(
-    (a, b) =>
-      a.miss - b.miss ||
-      a.spacerHeight - b.spacerHeight ||
-      a.stemLength - b.stemLength,
+  // On-target rows first, ordered by how stock the build is; everything else by
+  // how close it gets. See `plainness` for why the first group is not sorted by
+  // millimetres.
+  const onTarget = (o: AccufitOption) => (o.miss <= ACCUFIT_TOLERANCE_MM ? 0 : 1);
+  return out.sort((a, b) => {
+    const ga = onTarget(a);
+    const gb = onTarget(b);
+    if (ga !== gb) return ga - gb;
+    if (ga === 0) {
+      const p = plainness(a) - plainness(b);
+      if (Math.abs(p) > 1e-9) return p;
+    }
+    return a.miss - b.miss || a.spacerHeight - b.spacerHeight || a.stemLength - b.stemLength;
+  });
+}
+
+/**
+ * How far a build strays from what a bike is sold with. Lower is plainer.
+ *
+ * Used to order the rows that are all equally on target. Sorting those by
+ * millimetres would be false precision in the one place the tool exists to
+ * avoid it: below {@link ACCUFIT_TOLERANCE_MM} the difference is smaller than
+ * the effect of a different shoe or a saddle nudged on its rails, so putting a
+ * ±17° stem and a 40 mm spacer tower ahead of a stock cockpit to win 0.4 mm is
+ * recommending a worse bike on a number that does not mean anything.
+ *
+ * Beyond the tolerance this does not apply — there, closer really is better and
+ * the ranking says so.
+ *
+ * The weights say an unusual stem angle and a tall spacer stack are roughly
+ * equally non-stock, and stem length barely matters: every shop has a wall of
+ * stems, and swapping one is the cheapest change in the whole fit.
+ */
+export function plainness(o: AccufitOption): number {
+  return (
+    Math.abs(Math.abs(o.stemAngle) - 6) * 0.25 +
+    o.spacerHeight * 0.06 +
+    Math.abs(o.stemLength - 100) * 0.015
   );
 }
 
@@ -144,15 +174,21 @@ export function bestAccufit(
   return accufitOptions(frame, base, target, catalogue)[0] ?? null;
 }
 
-/** How to read a row: "spot on", or which way it is off and by how much. */
+/**
+ * How to read a row: "on target", or which way it is off and by how much.
+ *
+ * One decimal, not none. Rounded to whole millimetres a 2.1 mm miss printed as
+ * "2 mm long" against a 2 mm tolerance, which reads as a hit and is not one -
+ * the one rounding this whole module exists to avoid.
+ */
 export function describeMiss(o: AccufitOption): string {
   if (o.miss <= ACCUFIT_TOLERANCE_MM) return 'on target';
   const parts: string[] = [];
-  if (Math.abs(o.delta.x) >= 1) {
-    parts.push(`${Math.abs(o.delta.x).toFixed(0)} mm ${o.delta.x > 0 ? 'long' : 'short'}`);
+  if (Math.abs(o.delta.x) >= 0.5) {
+    parts.push(`${Math.abs(o.delta.x).toFixed(1)} mm ${o.delta.x > 0 ? 'long' : 'short'}`);
   }
-  if (Math.abs(o.delta.y) >= 1) {
-    parts.push(`${Math.abs(o.delta.y).toFixed(0)} mm ${o.delta.y > 0 ? 'high' : 'low'}`);
+  if (Math.abs(o.delta.y) >= 0.5) {
+    parts.push(`${Math.abs(o.delta.y).toFixed(1)} mm ${o.delta.y > 0 ? 'high' : 'low'}`);
   }
   return parts.join(', ') || 'on target';
 }

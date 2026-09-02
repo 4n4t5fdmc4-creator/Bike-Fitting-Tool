@@ -6,7 +6,7 @@ import type { FrameEvaluation } from '@/engine/score';
 import type { ReferenceBike } from '@/state/studio';
 import { OVERLAY_CAP, useOverlaySelection } from '@/state/overlaySelection';
 import { useComparisonMode } from '@/state/comparisonMode';
-import { Range, Segmented } from '../controls';
+import { Explainer, Range, Segmented } from '../controls';
 import { FrameOverlay, type OverlayCandidate } from '../FrameOverlay';
 
 /**
@@ -153,33 +153,32 @@ export function OverlayTab({
   return (
     <div className="space-y-4">
       <div className="rounded-[10px] border border-[var(--border)] bg-[var(--panel)] p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--text-3)]">
-              Frames side by side
-            </h3>
-            <p className="mt-1 max-w-xl text-xs text-[var(--text-3)]">
-              Up to {OVERLAY_CAP} candidates at once, plus the client’s own bike drawn dashed
-              underneath. Every bottom bracket sits at the same point.
-            </p>
-          </div>
-          <div className="no-print">
-            <Segmented
-              value={fitMode}
-              onChange={setFitMode}
-              options={[
-                { value: 'as-fitted', label: 'As fitted' },
-                { value: 'same-cockpit', label: 'Same cockpit' },
-              ]}
-            />
-          </div>
-        </div>
-
-        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-3)]">
-          {fitMode === 'as-fitted'
-            ? 'As fitted: each bike carries the build the solver says it needs to hit the target — so what you compare is four finished bikes, not four frames. The sliders play no part in this mode.'
-            : 'Same cockpit: every bike gets the one cockpit on the sliders below, so the only thing that differs between the drawings is the frame itself.'}
-        </p>
+        <Explainer
+          title="Frames side by side"
+          storageKey="overlay-intro"
+          aside={
+            <div className="no-print">
+              <Segmented
+                value={fitMode}
+                onChange={setFitMode}
+                options={[
+                  { value: 'as-fitted', label: 'As fitted' },
+                  { value: 'same-cockpit', label: 'Same cockpit' },
+                ]}
+              />
+            </div>
+          }
+        >
+          <p className="max-w-2xl text-xs text-[var(--text-3)]">
+            Up to {OVERLAY_CAP} candidates at once, plus the client’s own bike drawn dashed
+            underneath. Every bottom bracket sits at the same point.
+          </p>
+          <p className="mt-1.5 max-w-2xl text-[11px] leading-relaxed text-[var(--text-3)]">
+            {fitMode === 'as-fitted'
+              ? 'As fitted: each bike carries the build the solver says it needs to hit the target — so what you compare is finished bikes, not bare frames. The sliders play no part in this mode.'
+              : 'Same cockpit: every bike gets the one cockpit on the sliders below, so the only thing that differs between the drawings is the frame itself.'}
+          </p>
+        </Explainer>
 
         {fitMode === 'same-cockpit' && (
           <div className="no-print mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">

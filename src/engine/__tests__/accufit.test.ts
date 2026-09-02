@@ -9,6 +9,7 @@ import {
   accufitOptions,
   bestAccufit,
   describeMiss,
+  plainness,
 } from '../accufit';
 
 const frame = (stack: number, reach: number, hta: number): FrameCore => ({
@@ -35,36 +36,54 @@ describe('the enumeration only contains buildable cockpits', () => {
 });
 
 describe('ranking', () => {
-  it('finds the exact build when the target was produced by one', () => {
+  it('reproduces a build exactly when the target was produced by one', () => {
     // Round-trip: take a build straight out of the catalogue, compute the hood
-    // position it produces, and ask for it back. Anything but a hit means the
-    // enumeration and the forward model disagree.
+    // position it produces, and find it again in the enumeration. Anything but
+    // a zero miss means the enumeration and the forward model disagree.
     const built = resolveCockpit({ stemLength: mm(110), stemAngle: deg(-6), spacerHeight: mm(15) });
     const target = gripPoint(f, built);
 
-    const best = bestAccufit(f, base, target);
-    expect(best).not.toBeNull();
-    expect(best!.stemLength).toBe(110);
-    expect(best!.stemAngle).toBe(-6);
-    expect(best!.spacerHeight).toBe(15);
-    expect(best!.miss).toBeCloseTo(0, 6);
-    expect(describeMiss(best!)).toBe('on target');
+    const rows = accufitOptions(f, base, target);
+    const exact = rows.find(
+      (r) => r.stemLength === 110 && r.stemAngle === -6 && r.spacerHeight === 15,
+    );
+    expect(exact).toBeDefined();
+    expect(exact!.miss).toBeCloseTo(0, 6);
+    expect(describeMiss(exact!)).toBe('on target');
+    // It is on target, so whatever leads the list is on target too - even if a
+    // plainer build that also hits is listed above it.
+    expect(bestAccufit(f, base, target)!.miss).toBeLessThanOrEqual(ACCUFIT_TOLERANCE_MM);
   });
 
-  it('is sorted by miss, best first', () => {
+  it('puts every on-target row ahead of every row that misses', () => {
     const rows = accufitOptions(f, base, { x: mm(500), y: mm(700) });
-    for (let i = 1; i < rows.length; i += 1) {
-      expect(rows[i]!.miss).toBeGreaterThanOrEqual(rows[i - 1]!.miss - 1e-9);
+    let seenMiss = false;
+    for (const r of rows) {
+      if (r.miss > ACCUFIT_TOLERANCE_MM) seenMiss = true;
+      else expect(seenMiss).toBe(false);
     }
   });
 
-  it('breaks a tie towards the plainer build', () => {
-    // Two rows landing in the same place should present the one that looks like
-    // a stock bike: fewer spacers first, then the shorter stem.
-    const rows = accufitOptions(f, base, { x: mm(500), y: mm(700) });
-    const tied = rows.filter((r) => Math.abs(r.miss - rows[0]!.miss) < 1e-9);
-    if (tied.length > 1) {
-      expect(tied[0]!.spacerHeight).toBeLessThanOrEqual(tied[1]!.spacerHeight);
+  it('orders the on-target rows by how stock the build is, not by millimetres', () => {
+    // Aim at a position several builds can hit, then check the leading group is
+    // ordered by plainness. A 0.4 mm win does not justify a +17 stem.
+    const built = resolveCockpit({ stemLength: mm(100), stemAngle: deg(-6), spacerHeight: mm(20) });
+    const rows = accufitOptions(f, base, gripPoint(f, built));
+    const group = rows.filter((r) => r.miss <= ACCUFIT_TOLERANCE_MM);
+    expect(group.length).toBeGreaterThan(1);
+    for (let i = 1; i < group.length; i += 1) {
+      expect(plainness(group[i]!)).toBeGreaterThanOrEqual(plainness(group[i - 1]!) - 1e-9);
+    }
+    // And the stock-looking build is what comes out on top. Either sign: a stem
+    // is symmetric, so +6 and -6 are the same part the other way up.
+    expect(Math.abs(group[0]!.stemAngle)).toBe(6);
+  });
+
+  it('ranks purely by miss once past the tolerance', () => {
+    const rows = accufitOptions(f, base, { x: mm(500), y: mm(700) })
+      .filter((r) => r.miss > ACCUFIT_TOLERANCE_MM);
+    for (let i = 1; i < rows.length; i += 1) {
+      expect(rows[i]!.miss).toBeGreaterThanOrEqual(rows[i - 1]!.miss - 1e-9);
     }
   });
 });

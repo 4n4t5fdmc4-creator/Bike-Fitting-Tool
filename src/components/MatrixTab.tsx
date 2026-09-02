@@ -5,7 +5,7 @@ import { downloadCsv } from '@/lib/csv';
 import { DEFAULT_FIT_TOLERANCE, withinFitRadius, type FitTolerance } from '@/lib/fitRadius';
 import { useOverlaySelection } from '@/state/overlaySelection';
 import { useComparisonMode } from '@/state/comparisonMode';
-import { Range, Segmented } from './controls';
+import { Explainer, Range, Segmented } from './controls';
 import { StackReachScatter } from './StackReachScatter';
 import { HoodScatter } from './HoodScatter';
 
@@ -90,6 +90,15 @@ export function MatrixTab({
     useState<'all' | 'open' | 'semi-integrated' | 'integrated'>('all');
   const [sortKey, setSortKey] = useState<'score' | 'deltaReach' | 'deltaStack'>('score');
   const [plot, setPlot] = useState<'frame' | 'hood'>('frame');
+  /**
+   * Eighteen columns is a spreadsheet, not a table: it scrolled sideways, and
+   * the two columns that decide anything - score and whether the frame is in
+   * tolerance - slid off screen while the fitter was reading trail and
+   * wheelbase. The fit columns are always shown and the model column is pinned;
+   * the rest are two groups the fitter opens when the question arises.
+   */
+  const [showGeometry, setShowGeometry] = useState(false);
+  const [showBuild, setShowBuild] = useState(false);
 
   const setField = (k: keyof FitTolerance) => (v: number) => setTol((t) => ({ ...t, [k]: v }));
 
@@ -133,16 +142,24 @@ export function MatrixTab({
 
   const inRadiusCount = rows.filter(withinRadius).length;
 
+  // Ten fit columns, plus four per open group. Used for the empty row's colSpan
+  // and to decide whether the table still fits without sideways scrolling.
+  const colCount = 10 + (showGeometry ? 4 : 0) + (showBuild ? 4 : 0);
+
   // The export carries exactly the columns the table shows, in the same order,
   // with the reference row first when there is one. Kept next to the <thead> so
   // the two cannot drift.
   const csvHeaders = [
     'Model', 'Size', 'Reference', 'Stack', 'Reach', 'ΔStack', 'ΔReach',
     'Required stem (mm)', 'Required spacers (mm)', 'Within tolerance',
-    'Adjust down (mm)', 'Adjust up (mm)', 'Score', 'Verdict',
-    'Trail (mm)', 'Wheelbase (mm)', 'Chainstay (mm)', 'Max tyre (mm)',
-    'Cockpit type', 'Stock stem (mm)', 'Stock stem angle (deg)', 'Stock spacers (mm)',
-    'Source URL',
+    'Score', 'Verdict',
+    ...(showGeometry
+      ? ['Trail (mm)', 'Wheelbase (mm)', 'Chainstay (mm)', 'Max tyre (mm)']
+      : []),
+    ...(showBuild
+      ? ['Adjust down (mm)', 'Adjust up (mm)', 'Cockpit type', 'Stock stem (mm)',
+         'Stock stem angle (deg)', 'Stock spacers (mm)', 'Source URL']
+      : []),
   ];
   const csvRow = (r: MatrixRow): ReadonlyArray<string | number> => [
     r.model, r.size, r.isReference ? 'yes' : 'no',
@@ -150,12 +167,13 @@ export function MatrixTab({
     r.deltaStack.toFixed(0), r.deltaReach.toFixed(0),
     r.requiredStem.toFixed(0), r.requiredSpacers.toFixed(0),
     r.isReference ? '' : (withinRadius(r) ? 'yes' : 'no'),
-    r.adjustDown.toFixed(0), r.adjustUp.toFixed(0),
     Number.isNaN(r.score) ? '' : r.score.toFixed(1),
     r.verdict,
-    r.trail ?? '', r.wheelbase ?? '', r.chainstay ?? '', r.tyreMax ?? '',
-    r.cockpitType ?? '', r.stockStem ?? '', r.stockStemAngle ?? '', r.stockSpacers ?? '',
-    r.sourceUrl ?? '',
+    ...(showGeometry ? [r.trail ?? '', r.wheelbase ?? '', r.chainstay ?? '', r.tyreMax ?? ''] : []),
+    ...(showBuild
+      ? [r.adjustDown.toFixed(0), r.adjustUp.toFixed(0), r.cockpitType ?? '',
+         r.stockStem ?? '', r.stockStemAngle ?? '', r.stockSpacers ?? '', r.sourceUrl ?? '']
+      : []),
   ];
   const exportCsv = () =>
     downloadCsv(
@@ -167,19 +185,23 @@ export function MatrixTab({
   return (
     <div className="space-y-4">
       <div className="rounded-[10px] border border-[var(--border)] bg-[var(--panel)] p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-[var(--text-3)]">
-          Fit tolerance — how far from {referenceLabel} still counts as close
-        </h3>
-        {anchorIsEstimated && (
+        {/* Only the prose collapses. The sliders are the control, not the
+            explanation, and stay put either way. */}
+        <Explainer
+          title={`Fit tolerance — how far from ${referenceLabel} still counts as close`}
+          storageKey="matrix-tolerance"
+        >
+          {anchorIsEstimated && (
+            <p className="text-[11px] text-[var(--status-warning)]">
+              No reference bike is on file, so the anchor is an estimated frame stack/reach derived
+              from the target position with a typical head angle — narrower with a real reference bike.
+            </p>
+          )}
           <p className="mt-1 text-[11px] text-[var(--text-3)]">
-            No reference bike is on file, so the anchor is an estimated frame stack/reach derived
-            from the target position with a typical head angle — narrower with a real reference bike.
+            Shorter and longer in reach, lower and higher in stack are set separately — a frame that
+            comes up short can be pulled back with a longer stem, one that runs long usually cannot.
           </p>
-        )}
-        <p className="mt-1 text-[11px] text-[var(--text-3)]">
-          Shorter and longer in reach, lower and higher in stack are set separately — a frame that
-          comes up short can be pulled back with a longer stem, one that runs long usually cannot.
-        </p>
+        </Explainer>
         <div className="mt-3 grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
           <Tol label="Reach — shorter" v={tol.xs} max={40} onChange={setField('xs')} />
           <Tol label="Reach — longer" v={tol.xl} max={40} onChange={setField('xl')} />
@@ -287,49 +309,78 @@ export function MatrixTab({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-[10px] border border-[var(--border)]">
-        <table className="tabular w-full min-w-[76rem] text-sm">
-          <thead className="bg-[var(--panel-2)] text-left text-[11px] uppercase tracking-wider text-[var(--text-3)]">
-            <tr>
-              <th className="px-3 py-2">Model</th>
-              <th className="px-2 py-2">Size</th>
-              <th className="px-2 py-2 text-right">Stack</th>
-              <th className="px-2 py-2 text-right">Reach</th>
-              <SortableTh label="Δ Stack" active={sortKey === 'deltaStack'} onClick={() => setSortKey('deltaStack')} />
-              <SortableTh label="Δ Reach" active={sortKey === 'deltaReach'} onClick={() => setSortKey('deltaReach')} />
-              <th className="px-2 py-2 text-right">Stem</th>
-              <th className="px-2 py-2 text-right">Spacers</th>
-              <th className="px-2 py-2">Adjustment left</th>
-              <SortableTh label="Score" active={sortKey === 'score'} onClick={() => setSortKey('score')} />
-              <th className="px-2 py-2">Radius</th>
-              <th className="px-2 py-2 text-right">Trail</th>
-              <th className="px-2 py-2 text-right">Wheelbase</th>
-              <th className="px-2 py-2 text-right">Chainstay</th>
-              <th className="px-2 py-2 text-right">Max tyre</th>
-              <th className="px-2 py-2">Cockpit</th>
-              <th className="px-2 py-2">Stock build</th>
-              <th className="px-2 py-2">Source</th>
-            </tr>
-          </thead>
-          <tbody>
-            {referenceRow && <MatrixTr key="__reference" r={referenceRow} withinRadius={withinRadius} />}
-            {sorted.map((r) => (
-              <MatrixTr key={r.id} r={r} withinRadius={withinRadius} />
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={18} className="px-3 py-6 text-center text-[var(--text-3)]">No catalogue sizes match the current filters.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="rounded-[10px] border border-[var(--border)] bg-[var(--panel)]">
+        <div className="no-print flex flex-wrap items-center gap-2 border-b border-[var(--border)] px-3 py-2 text-[11px]">
+          <span className="text-[var(--text-3)]">Columns</span>
+          <span className="rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-2 py-0.5 text-[var(--text-2)]">
+            Fit
+          </span>
+          <ColumnToggle label="Handling &amp; tyres" on={showGeometry} onClick={() => setShowGeometry((v) => !v)} />
+          <ColumnToggle label="Build &amp; source" on={showBuild} onClick={() => setShowBuild((v) => !v)} />
+        </div>
+        <div className="overflow-x-auto">
+          <table className={`tabular w-full text-sm ${colCount > 12 ? 'min-w-[76rem]' : 'min-w-[46rem]'}`}>
+            <thead className="bg-[var(--panel-2)] text-left text-[11px] uppercase tracking-wider text-[var(--text-3)]">
+              <tr>
+                <th className="sticky left-0 z-[2] bg-[var(--panel-2)] px-3 py-2">Model</th>
+                <th className="px-2 py-2">Size</th>
+                <th className="px-2 py-2 text-right">Stack</th>
+                <th className="px-2 py-2 text-right">Reach</th>
+                <SortableTh label="Δ Stack" active={sortKey === 'deltaStack'} onClick={() => setSortKey('deltaStack')} />
+                <SortableTh label="Δ Reach" active={sortKey === 'deltaReach'} onClick={() => setSortKey('deltaReach')} />
+                <th className="px-2 py-2 text-right">Stem</th>
+                <th className="px-2 py-2 text-right">Spacers</th>
+                <SortableTh label="Score" active={sortKey === 'score'} onClick={() => setSortKey('score')} />
+                <th className="px-2 py-2">Radius</th>
+                {showGeometry && (
+                  <>
+                    <th className="px-2 py-2 text-right">Trail</th>
+                    <th className="px-2 py-2 text-right">Wheelbase</th>
+                    <th className="px-2 py-2 text-right">Chainstay</th>
+                    <th className="px-2 py-2 text-right">Max tyre</th>
+                  </>
+                )}
+                {showBuild && (
+                  <>
+                    <th className="px-2 py-2">Adjustment left</th>
+                    <th className="px-2 py-2">Cockpit</th>
+                    <th className="px-2 py-2">Stock build</th>
+                    <th className="px-2 py-2">Source</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {referenceRow && (
+                <MatrixTr key="__reference" r={referenceRow} withinRadius={withinRadius}
+                  showGeometry={showGeometry} showBuild={showBuild} />
+              )}
+              {sorted.map((r) => (
+                <MatrixTr key={r.id} r={r} withinRadius={withinRadius}
+                  showGeometry={showGeometry} showBuild={showBuild} />
+              ))}
+              {sorted.length === 0 && (
+                <tr><td colSpan={colCount} className="px-3 py-6 text-center text-[var(--text-3)]">No catalogue sizes match the current filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <p className="text-[11px] text-[var(--text-3)]">
-        Trail, wheelbase, chainstay, max tyre, cockpit type and stock build are shown only where the
-        manufacturer&rsquo;s table publishes them — a blank cell means &ldquo;not published&rdquo;,
-        never an estimate. <b>Adjustment left</b> is the vertical hood travel still available below
-        (▼) and above (▲) the recommended build, moving spacers within the frame record&rsquo;s own
-        limit (a standard 40&nbsp;mm unless the frame sets its own).
-      </p>
+      {(showGeometry || showBuild) && (
+        <p className="text-[11px] text-[var(--text-3)]">
+          Trail, wheelbase, chainstay, max tyre, cockpit type and stock build are shown only where
+          the manufacturer&rsquo;s table publishes them — a blank cell means
+          &ldquo;not published&rdquo;, never an estimate.
+          {showBuild && (
+            <>
+              {' '}<b>Adjustment left</b> is the vertical hood travel still available below (▼) and
+              above (▲) the recommended build, moving spacers within the frame record&rsquo;s own
+              limit (a standard 40&nbsp;mm unless the frame sets its own).
+            </>
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -368,16 +419,28 @@ function AdjustBar({ down, up }: { down: number; up: number }) {
   );
 }
 
-function MatrixTr({ r, withinRadius }: { r: MatrixRow; withinRadius: (r: MatrixRow) => boolean }) {
+function MatrixTr({
+  r, withinRadius, showGeometry, showBuild,
+}: {
+  r: MatrixRow;
+  withinRadius: (r: MatrixRow) => boolean;
+  showGeometry: boolean;
+  showBuild: boolean;
+}) {
   const inR = !r.isReference && withinRadius(r);
   const dim = !r.isReference && !inR;
+  // The pinned Model cell has to paint over the columns sliding under it, so
+  // every row needs a real background - `inherit` on the sticky cell then picks
+  // up whichever one this row has.
+  const rowBg = r.isReference
+    ? 'color-mix(in srgb, var(--acc) 10%, var(--panel))'
+    : 'var(--panel)';
   return (
     <tr
-      className={`border-t border-[var(--border)] ${dim ? 'opacity-50' : ''} ${
-        r.isReference ? 'bg-[color-mix(in_srgb,var(--acc)_10%,transparent)]' : ''
-      }`}
+      className={`border-t border-[var(--border)] ${dim ? 'opacity-50' : ''}`}
+      style={{ background: rowBg }}
     >
-      <td className="px-3 py-2">
+      <td className="sticky left-0 z-[1] px-3 py-2" style={{ background: 'inherit' }}>
         {r.model}
         {r.isReference && (
           <span className="ml-2 rounded-full bg-[color-mix(in_srgb,var(--acc)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--acc)]">
@@ -392,9 +455,6 @@ function MatrixTr({ r, withinRadius }: { r: MatrixRow; withinRadius: (r: MatrixR
       <td className="px-2 py-2 text-right">{r.deltaReach >= 0 ? '+' : ''}{r.deltaReach.toFixed(0)}</td>
       <td className="px-2 py-2 text-right">{r.requiredStem.toFixed(0)}</td>
       <td className="px-2 py-2 text-right">{r.requiredSpacers.toFixed(0)}</td>
-      <td className="px-2 py-2">
-        {r.isReference ? <span className="text-[11px] text-[var(--text-3)]">—</span> : <AdjustBar down={r.adjustDown} up={r.adjustUp} />}
-      </td>
       <td className="px-2 py-2 text-right font-semibold">{Number.isNaN(r.score) ? '—' : r.score.toFixed(0)}</td>
       <td className="px-2 py-2">
         {r.isReference ? (
@@ -407,22 +467,50 @@ function MatrixTr({ r, withinRadius }: { r: MatrixRow; withinRadius: (r: MatrixR
           <span className="text-[11px] text-[var(--text-3)]">outside</span>
         )}
       </td>
-      <td className="px-2 py-2 text-right">{fmt(r.trail)}</td>
-      <td className="px-2 py-2 text-right">{fmt(r.wheelbase)}</td>
-      <td className="px-2 py-2 text-right">{fmt(r.chainstay)}</td>
-      <td className="px-2 py-2 text-right">{fmt(r.tyreMax)}</td>
-      <td className="px-2 py-2">{r.cockpitType ?? '—'}</td>
-      <td className="px-2 py-2 whitespace-nowrap">{stockBuild(r)}</td>
-      <td className="px-2 py-2">
-        {r.sourceUrl ? (
-          <a href={r.sourceUrl} target="_blank" rel="noreferrer" className="text-[var(--acc)] hover:underline">
-            source ↗
-          </a>
-        ) : (
-          <span className="text-[var(--text-3)]">—</span>
-        )}
-      </td>
+      {showGeometry && (
+        <>
+          <td className="px-2 py-2 text-right">{fmt(r.trail)}</td>
+          <td className="px-2 py-2 text-right">{fmt(r.wheelbase)}</td>
+          <td className="px-2 py-2 text-right">{fmt(r.chainstay)}</td>
+          <td className="px-2 py-2 text-right">{fmt(r.tyreMax)}</td>
+        </>
+      )}
+      {showBuild && (
+        <>
+          <td className="px-2 py-2">
+            {r.isReference ? <span className="text-[11px] text-[var(--text-3)]">—</span> : <AdjustBar down={r.adjustDown} up={r.adjustUp} />}
+          </td>
+          <td className="px-2 py-2">{r.cockpitType ?? '—'}</td>
+          <td className="px-2 py-2 whitespace-nowrap">{stockBuild(r)}</td>
+          <td className="px-2 py-2">
+            {r.sourceUrl ? (
+              <a href={r.sourceUrl} target="_blank" rel="noreferrer" className="text-[var(--acc)] hover:underline">
+                source ↗
+              </a>
+            ) : (
+              <span className="text-[var(--text-3)]">—</span>
+            )}
+          </td>
+        </>
+      )}
     </tr>
+  );
+}
+
+/** One column-group chip. "Fit" has no chip - it is never hidden. */
+function ColumnToggle({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={on}
+      className={`rounded-md border px-2 py-0.5 transition-colors ${
+        on
+          ? 'border-[var(--acc)] bg-[var(--panel-2)] text-[var(--foreground)]'
+          : 'border-[var(--border)] text-[var(--text-3)] hover:text-[var(--text-2)]'
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

@@ -41,37 +41,20 @@ export function StudioBar() {
 
   return (
     <header className="no-print sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--panel)]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-2.5">
-        <button
-          onClick={() => logoInput.current?.click()}
-          title={studio.logo ? 'Replace logo' : 'Add your logo'}
-          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--panel-2)] text-[10px] text-[var(--text-3)] hover:border-[var(--acc)]"
-        >
-          {studio.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={studio.logo} alt="" className="h-full w-full object-contain" />
-          ) : (
-            'LOGO'
-          )}
-        </button>
-        <input
-          ref={logoInput} type="file" accept="image/*" className="hidden"
-          onChange={(e) => void onLogo(e.target.files?.[0])}
-        />
-
-        <input
-          value={studio.name}
-          onChange={(e) => setStudio({ name: e.target.value })}
-          placeholder="Your studio name"
-          aria-label="Studio name"
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-semibold hover:border-[var(--border)] focus:border-[var(--acc)] focus:outline-none"
-        />
-
+      {/*
+        The subject of this app is the client, not the studio. Branding used to
+        take the most prominent position and hold it with a grey "LOGO" box and
+        a bold "Your studio name" placeholder - the loudest thing on the page
+        said nothing. Unset branding is now a quiet, dashed invitation and the
+        client switcher carries the weight; once a name or logo IS set, it
+        earns normal prominence back.
+      */}
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2.5 px-4 py-2.5">
         <select
           value={activeClientId ?? ''}
           onChange={(e) => selectClient(e.target.value || null)}
           aria-label="Active client"
-          className="max-w-[14rem] rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-2 py-1.5 text-sm"
+          className="max-w-[16rem] rounded-md border border-[var(--border)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm font-semibold"
         >
           <option value="">— no client selected —</option>
           {clients.map((c) => (
@@ -85,6 +68,43 @@ export function StudioBar() {
         >
           + Client
         </button>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={() => logoInput.current?.click()}
+          title={studio.logo ? 'Replace logo' : 'Add your logo'}
+          className={`flex shrink-0 items-center justify-center overflow-hidden rounded-md hover:border-[var(--acc)] ${
+            studio.logo
+              ? 'h-8 w-8 border border-[var(--border)] bg-[var(--panel-2)]'
+              : 'h-6 w-6 border border-dashed border-[var(--border)] text-[11px] text-[var(--text-3)]'
+          }`}
+        >
+          {studio.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={studio.logo} alt="" className="h-full w-full object-contain" />
+          ) : (
+            <span aria-hidden>+</span>
+          )}
+          <span className="sr-only">{studio.logo ? 'Replace logo' : 'Add your logo'}</span>
+        </button>
+        <input
+          ref={logoInput} type="file" accept="image/*" className="hidden"
+          onChange={(e) => void onLogo(e.target.files?.[0])}
+        />
+
+        <input
+          value={studio.name}
+          onChange={(e) => setStudio({ name: e.target.value })}
+          placeholder="Add studio name"
+          aria-label="Studio name"
+          size={studio.name ? Math.max(studio.name.length, 8) : 16}
+          className={`min-w-0 rounded-md border border-transparent bg-transparent px-1.5 py-1 hover:border-[var(--border)] focus:border-[var(--acc)] focus:outline-none ${
+            studio.name
+              ? 'text-sm font-semibold'
+              : 'text-xs text-[var(--text-3)] placeholder:text-[var(--text-3)]'
+          }`}
+        />
 
         <div className="flex gap-1.5">
           <button

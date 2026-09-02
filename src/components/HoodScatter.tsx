@@ -179,23 +179,37 @@ export function HoodScatter({
         </svg>
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-[var(--text-3)]">
-        {models.map((m) => (
-          <span key={m} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
-            {m}
+      {/* Grouped like the stack/reach legend: model identity and the tolerance
+          window are different kinds of thing and must not look alike. */}
+      <div className="mt-1 flex flex-wrap items-start gap-x-6 gap-y-2 px-1 text-[11px] text-[var(--text-3)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Models</span>
+          {models.map((m) => (
+            <span key={m} className="flex items-center gap-1.5 text-[var(--text-2)]">
+              <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
+              {m}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Around the target</span>
+          <span className="flex items-center gap-1.5 text-[var(--text-2)]">
+            <span
+              className="h-2.5 w-4 rounded-[2px] border"
+              style={{
+                background: 'color-mix(in srgb, var(--status-good) 26%, transparent)',
+                borderColor: 'var(--status-good)',
+              }}
+            />
+            target window
           </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 rounded-sm" style={{ background: 'var(--status-good)', opacity: 0.4 }} />
-          target window
-        </span>
-        <span>
-          {mode === 'as-fitted'
-            ? 'each bike built to its own target'
-            : 'every bike on the shared cockpit'}
-          {anchorIsEstimated ? ' · window around an estimated position' : ''}
-        </span>
+          <span>
+            {mode === 'as-fitted'
+              ? 'each bike built to its own target'
+              : 'every bike on the shared cockpit'}
+            {anchorIsEstimated ? ' · window around an estimated position' : ''}
+          </span>
+        </div>
       </div>
     </div>
   );

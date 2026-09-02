@@ -241,22 +241,52 @@ export function StackReachScatter({
         </svg>
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-[var(--text-3)]">
-        {models.map((m) => (
-          <span key={m} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
-            {m}
+      {/* Two legends, not one strip.
+          Colour means two unrelated things in this plot - which model a dot
+          belongs to, and whether an area is inside tolerance - and running them
+          together as identical swatches asked the reader to know which green
+          was which. They are now separate groups with different marks: models
+          are dots, zones are bordered areas, the isoline is a dashed rule. */}
+      <div className="mt-1 flex flex-wrap items-start gap-x-6 gap-y-2 px-1 text-[11px] text-[var(--text-3)]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Models</span>
+          {models.map((m) => (
+            <span key={m} className="flex items-center gap-1.5 text-[var(--text-2)]">
+              <span className="h-2 w-2 rounded-full" style={{ background: colorOf(m) }} />
+              {m}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="uppercase tracking-wider">Around the reference</span>
+          <span className="flex items-center gap-1.5 text-[var(--text-2)]">
+            <span
+              className="h-2.5 w-4 rounded-[2px] border"
+              style={{
+                background: 'color-mix(in srgb, var(--status-good) 30%, transparent)',
+                borderColor: 'var(--status-good)',
+              }}
+            />
+            in tolerance
           </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 rounded-sm" style={{ background: 'var(--status-good)', opacity: 0.4 }} />
-          in tolerance
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-2 w-3 rounded-sm" style={{ background: 'var(--status-warning)', opacity: 0.35 }} />
-          within 2×
-        </span>
-        <span>dashed: stack ÷ reach</span>
+          <span className="flex items-center gap-1.5 text-[var(--text-2)]">
+            <span
+              className="h-2.5 w-4 rounded-[2px] border"
+              style={{
+                background: 'color-mix(in srgb, var(--status-warning) 22%, transparent)',
+                borderColor: 'var(--status-warning)',
+              }}
+            />
+            within 2×
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span
+              className="h-0 w-4 border-t border-dashed"
+              style={{ borderColor: 'var(--text-3)' }}
+            />
+            stack ÷ reach
+          </span>
+        </div>
       </div>
     </div>
   );

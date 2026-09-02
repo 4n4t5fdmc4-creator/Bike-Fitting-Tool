@@ -3,6 +3,7 @@
 import { deg, mm } from '@/domain/units';
 import { frameOutline, outlineBounds, type FrameOutline, type OutlinePoint } from '@/engine/outline';
 import { makeProjection } from '@/lib/projection';
+import { Explainer } from './controls';
 
 export interface OverlayCandidate {
   readonly id: string;
@@ -184,14 +185,18 @@ export function FrameOverlay({
         ))}
       </div>
 
-      <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-3)]">
-        Every bottom bracket is at the same point. Head tube position and angle are exact, from
-        stack, reach and head tube angle. The dashed
-        top tube, the cockpit and the wheels use typical road-bike values where the entered geometry
-        does not include effective top tube, chainstay, wheelbase or tyre clearance — this is a rough
-        visual comparison, not a scale drawing.
-        {someInexact && ' Frames marked "schematic" are missing effective top tube, head tube length or chainstay in their data.'}
-      </p>
+      <div className="mt-2">
+        <Explainer title="How exact is this drawing?" storageKey="overlay-drawing-caveats">
+          <p className="text-[11px] leading-relaxed text-[var(--text-3)]">
+            Every bottom bracket is at the same point. Head tube position and angle are exact, from
+            stack, reach and head tube angle. The dashed top tube, the cockpit and the wheels use
+            typical road-bike values where the entered geometry does not include effective top tube,
+            chainstay, wheelbase or tyre clearance — this is a rough visual comparison, not a scale
+            drawing.
+            {someInexact && ' Frames marked "schematic" are missing effective top tube, head tube length or chainstay in their data.'}
+          </p>
+        </Explainer>
+      </div>
     </div>
   );
 }
