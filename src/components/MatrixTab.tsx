@@ -21,6 +21,31 @@ export interface MatrixRow {
   readonly requiredSpacers: number;
   readonly score: number;
   readonly verdict: string;
+
+  /**
+   * Manufacturer-table columns, all optional: a value is shown only when the
+   * source publishes it and is never inferred from another field. Blank in the
+   * table means "not published", not "zero".
+   */
+  readonly trail?: number | undefined;
+  readonly wheelbase?: number | undefined;
+  readonly chainstay?: number | undefined;
+  readonly tyreMax?: number | undefined;
+  readonly cockpitType?: 'open' | 'semi-integrated' | 'integrated' | undefined;
+  readonly stockStem?: number | undefined;
+  readonly stockStemAngle?: number | undefined;
+  readonly stockSpacers?: number | undefined;
+  readonly sourceUrl?: string | undefined;
+
+  /** The client's own bike, pinned and marked. */
+  readonly isReference?: boolean | undefined;
+
+  /**
+   * Vertical hood travel still available below / above the recommended build,
+   * within the frame's own spacer limit. Millimetres.
+   */
+  readonly adjustDown: number;
+  readonly adjustUp: number;
 }
 
 interface XY { readonly x: number; readonly y: number }
@@ -43,10 +68,12 @@ export interface HoodRow {
  * in-radius column read the SAME four numbers - one source of truth.
  */
 export function MatrixTab({
-  rows, anchor, referenceLabel, anchorIsEstimated,
+  rows, referenceRow, anchor, referenceLabel, anchorIsEstimated,
   hoodRows, referenceGrip, referenceHood,
 }: {
   rows: ReadonlyArray<MatrixRow>;
+  /** The client's own bike, rendered pinned above the catalogue rows. */
+  referenceRow: MatrixRow | null;
   anchor: { stack: number; reach: number };
   referenceLabel: string;
   anchorIsEstimated?: boolean;
@@ -58,6 +85,9 @@ export function MatrixTab({
 }) {
   const [tol, setTol] = useState<FitTolerance>(DEFAULT_FIT_TOLERANCE);
   const [onlyWithinRadius, setOnlyWithinRadius] = useState(false);
+  const [wideTyresOnly, setWideTyresOnly] = useState(false);
+  const [cockpitFilter, setCockpitFilter] =
+    useState<'all' | 'open' | 'semi-integrated' | 'integrated'>('all');
   const [sortKey, setSortKey] = useState<'score' | 'deltaReach' | 'deltaStack'>('score');
   const [plot, setPlot] = useState<'frame' | 'hood'>('frame');
 
@@ -85,16 +115,54 @@ export function MatrixTab({
 
   const withinRadius = (r: MatrixRow) => withinFitRadius(r.deltaReach, r.deltaStack, tol);
 
+  // A tyre-clearance filter can only keep a row it can confirm: a frame whose
+  // table never published a max tyre is dropped, not assumed wide.
+  const passesFilters = (r: MatrixRow) =>
+    (!onlyWithinRadius || withinRadius(r)) &&
+    (!wideTyresOnly || (r.tyreMax !== undefined && r.tyreMax >= 35)) &&
+    (cockpitFilter === 'all' || r.cockpitType === cockpitFilter);
+
   const sorted = useMemo(() => {
-    const filtered = onlyWithinRadius ? rows.filter(withinRadius) : rows;
+    const filtered = rows.filter(passesFilters);
     return [...filtered].sort((a, b) => {
       if (sortKey === 'score') return b.score - a.score;
       if (sortKey === 'deltaReach') return Math.abs(a.deltaReach) - Math.abs(b.deltaReach);
       return Math.abs(a.deltaStack) - Math.abs(b.deltaStack);
     });
-  }, [rows, onlyWithinRadius, tol, sortKey]);
+  }, [rows, onlyWithinRadius, wideTyresOnly, cockpitFilter, tol, sortKey]);
 
   const inRadiusCount = rows.filter(withinRadius).length;
+
+  // The export carries exactly the columns the table shows, in the same order,
+  // with the reference row first when there is one. Kept next to the <thead> so
+  // the two cannot drift.
+  const csvHeaders = [
+    'Model', 'Size', 'Reference', 'Stack', 'Reach', 'ΔStack', 'ΔReach',
+    'Required stem (mm)', 'Required spacers (mm)', 'Within tolerance',
+    'Adjust down (mm)', 'Adjust up (mm)', 'Score', 'Verdict',
+    'Trail (mm)', 'Wheelbase (mm)', 'Chainstay (mm)', 'Max tyre (mm)',
+    'Cockpit type', 'Stock stem (mm)', 'Stock stem angle (deg)', 'Stock spacers (mm)',
+    'Source URL',
+  ];
+  const csvRow = (r: MatrixRow): ReadonlyArray<string | number> => [
+    r.model, r.size, r.isReference ? 'yes' : 'no',
+    r.stack.toFixed(0), r.reach.toFixed(0),
+    r.deltaStack.toFixed(0), r.deltaReach.toFixed(0),
+    r.requiredStem.toFixed(0), r.requiredSpacers.toFixed(0),
+    r.isReference ? '' : (withinRadius(r) ? 'yes' : 'no'),
+    r.adjustDown.toFixed(0), r.adjustUp.toFixed(0),
+    Number.isNaN(r.score) ? '' : r.score.toFixed(1),
+    r.verdict,
+    r.trail ?? '', r.wheelbase ?? '', r.chainstay ?? '', r.tyreMax ?? '',
+    r.cockpitType ?? '', r.stockStem ?? '', r.stockStemAngle ?? '', r.stockSpacers ?? '',
+    r.sourceUrl ?? '',
+  ];
+  const exportCsv = () =>
+    downloadCsv(
+      `fit-matrix-${new Date().toISOString().slice(0, 10)}.csv`,
+      csvHeaders,
+      [...(referenceRow ? [referenceRow] : []), ...sorted].map(csvRow),
+    );
 
   return (
     <div className="space-y-4">
@@ -118,26 +186,33 @@ export function MatrixTab({
           <Tol label="Stack — lower" v={tol.yl} max={50} onChange={setField('yl')} />
           <Tol label="Stack — higher" v={tol.yh} max={50} onChange={setField('yh')} />
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+        <div className="no-print mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
           <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={onlyWithinRadius} onChange={(e) => setOnlyWithinRadius(e.target.checked)} />
-            Show only sizes within tolerance
+            Within tolerance only
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={wideTyresOnly} onChange={(e) => setWideTyresOnly(e.target.checked)} />
+            35 mm tyres or wider
+          </label>
+          <label className="flex items-center gap-1.5">
+            Cockpit
+            <select
+              value={cockpitFilter}
+              onChange={(e) => setCockpitFilter(e.target.value as typeof cockpitFilter)}
+              className="rounded border border-[var(--border)] bg-[var(--panel-2)] px-1.5 py-0.5"
+            >
+              <option value="all">any</option>
+              <option value="open">open</option>
+              <option value="semi-integrated">semi-integrated</option>
+              <option value="integrated">integrated</option>
+            </select>
           </label>
           <span className="text-[var(--text-3)]">
-            {inRadiusCount} of {rows.length} sizes within the current tolerance
+            {sorted.length} of {rows.length} sizes shown · {inRadiusCount} within tolerance
           </span>
           <button
-            onClick={() =>
-              downloadCsv(
-                `fit-matrix-${new Date().toISOString().slice(0, 10)}.csv`,
-                ['Model', 'Size', 'Stack', 'Reach', 'ΔStack', 'ΔReach', 'Within tolerance', 'Required stem (mm)', 'Required spacers (mm)', 'Score', 'Verdict'],
-                sorted.map((r) => [
-                  r.model, r.size, r.stack, r.reach, r.deltaStack.toFixed(0), r.deltaReach.toFixed(0),
-                  withinRadius(r) ? 'yes' : 'no', r.requiredStem.toFixed(0), r.requiredSpacers.toFixed(0),
-                  r.score.toFixed(1), r.verdict,
-                ]),
-              )
-            }
+            onClick={exportCsv}
             className="ml-auto rounded-md border border-[var(--border)] px-2.5 py-1 text-[var(--text-2)] hover:border-[var(--acc)] hover:text-[var(--foreground)]"
           >
             Export CSV
@@ -213,7 +288,7 @@ export function MatrixTab({
       </div>
 
       <div className="overflow-x-auto rounded-[10px] border border-[var(--border)]">
-        <table className="tabular w-full min-w-[52rem] text-sm">
+        <table className="tabular w-full min-w-[76rem] text-sm">
           <thead className="bg-[var(--panel-2)] text-left text-[11px] uppercase tracking-wider text-[var(--text-3)]">
             <tr>
               <th className="px-3 py-2">Model</th>
@@ -224,43 +299,130 @@ export function MatrixTab({
               <SortableTh label="Δ Reach" active={sortKey === 'deltaReach'} onClick={() => setSortKey('deltaReach')} />
               <th className="px-2 py-2 text-right">Stem</th>
               <th className="px-2 py-2 text-right">Spacers</th>
+              <th className="px-2 py-2">Adjustment left</th>
               <SortableTh label="Score" active={sortKey === 'score'} onClick={() => setSortKey('score')} />
               <th className="px-2 py-2">Radius</th>
+              <th className="px-2 py-2 text-right">Trail</th>
+              <th className="px-2 py-2 text-right">Wheelbase</th>
+              <th className="px-2 py-2 text-right">Chainstay</th>
+              <th className="px-2 py-2 text-right">Max tyre</th>
+              <th className="px-2 py-2">Cockpit</th>
+              <th className="px-2 py-2">Stock build</th>
+              <th className="px-2 py-2">Source</th>
             </tr>
           </thead>
           <tbody>
-            {sorted.map((r) => {
-              const inR = withinRadius(r);
-              return (
-                <tr key={r.id} className={`border-t border-[var(--border)] ${inR ? '' : 'opacity-50'}`}>
-                  <td className="px-3 py-2">{r.model}</td>
-                  <td className="px-2 py-2 font-medium">{r.size}</td>
-                  <td className="px-2 py-2 text-right">{r.stack.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right">{r.reach.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right">{r.deltaStack >= 0 ? '+' : ''}{r.deltaStack.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right">{r.deltaReach >= 0 ? '+' : ''}{r.deltaReach.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right">{r.requiredStem.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right">{r.requiredSpacers.toFixed(0)}</td>
-                  <td className="px-2 py-2 text-right font-semibold">{r.score.toFixed(0)}</td>
-                  <td className="px-2 py-2">
-                    {inR ? (
-                      <span className="rounded-full bg-[color-mix(in_srgb,var(--status-good)_16%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--status-good)]">
-                        ✓ in radius
-                      </span>
-                    ) : (
-                      <span className="text-[11px] text-[var(--text-3)]">outside</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {referenceRow && <MatrixTr key="__reference" r={referenceRow} withinRadius={withinRadius} />}
+            {sorted.map((r) => (
+              <MatrixTr key={r.id} r={r} withinRadius={withinRadius} />
+            ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={10} className="px-3 py-6 text-center text-[var(--text-3)]">No sizes within this tolerance.</td></tr>
+              <tr><td colSpan={18} className="px-3 py-6 text-center text-[var(--text-3)]">No catalogue sizes match the current filters.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      <p className="text-[11px] text-[var(--text-3)]">
+        Trail, wheelbase, chainstay, max tyre, cockpit type and stock build are shown only where the
+        manufacturer&rsquo;s table publishes them — a blank cell means &ldquo;not published&rdquo;,
+        never an estimate. <b>Adjustment left</b> is the vertical hood travel still available below
+        (▼) and above (▲) the recommended build, moving spacers within the frame record&rsquo;s own
+        limit (a standard 40&nbsp;mm unless the frame sets its own).
+      </p>
     </div>
+  );
+}
+
+const fmt = (v: number | undefined): string => (v === undefined ? '—' : v.toFixed(0));
+
+function stockBuild(r: MatrixRow): string {
+  if (r.stockStem === undefined && r.stockStemAngle === undefined && r.stockSpacers === undefined) {
+    return '—';
+  }
+  const parts: string[] = [];
+  if (r.stockStem !== undefined) parts.push(`${r.stockStem.toFixed(0)} mm`);
+  if (r.stockStemAngle !== undefined) {
+    parts.push(`${r.stockStemAngle > 0 ? '+' : ''}${r.stockStemAngle.toFixed(0)}°`);
+  }
+  if (r.stockSpacers !== undefined) parts.push(`${r.stockSpacers.toFixed(0)} mm sp.`);
+  return parts.join(' / ');
+}
+
+/** Down/up spacer headroom as a split bar, scaled to the row's own total. */
+function AdjustBar({ down, up }: { down: number; up: number }) {
+  const total = down + up;
+  if (total <= 0.5) return <span className="text-[11px] text-[var(--text-3)]">—</span>;
+  const downPct = (down / total) * 100;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5"
+      title={`${down.toFixed(0)} mm down · ${up.toFixed(0)} mm up`}
+    >
+      <span className="w-8 text-right text-[10px] tabular text-[var(--text-3)]">▼{down.toFixed(0)}</span>
+      <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--status-good)_22%,transparent)]">
+        <span className="absolute inset-y-0 left-0 bg-[var(--text-3)]" style={{ width: `${downPct}%` }} />
+      </span>
+      <span className="w-8 text-[10px] tabular text-[var(--text-3)]">▲{up.toFixed(0)}</span>
+    </span>
+  );
+}
+
+function MatrixTr({ r, withinRadius }: { r: MatrixRow; withinRadius: (r: MatrixRow) => boolean }) {
+  const inR = !r.isReference && withinRadius(r);
+  const dim = !r.isReference && !inR;
+  return (
+    <tr
+      className={`border-t border-[var(--border)] ${dim ? 'opacity-50' : ''} ${
+        r.isReference ? 'bg-[color-mix(in_srgb,var(--acc)_10%,transparent)]' : ''
+      }`}
+    >
+      <td className="px-3 py-2">
+        {r.model}
+        {r.isReference && (
+          <span className="ml-2 rounded-full bg-[color-mix(in_srgb,var(--acc)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--acc)]">
+            ★ reference
+          </span>
+        )}
+      </td>
+      <td className="px-2 py-2 font-medium">{r.size}</td>
+      <td className="px-2 py-2 text-right">{r.stack.toFixed(0)}</td>
+      <td className="px-2 py-2 text-right">{r.reach.toFixed(0)}</td>
+      <td className="px-2 py-2 text-right">{r.deltaStack >= 0 ? '+' : ''}{r.deltaStack.toFixed(0)}</td>
+      <td className="px-2 py-2 text-right">{r.deltaReach >= 0 ? '+' : ''}{r.deltaReach.toFixed(0)}</td>
+      <td className="px-2 py-2 text-right">{r.requiredStem.toFixed(0)}</td>
+      <td className="px-2 py-2 text-right">{r.requiredSpacers.toFixed(0)}</td>
+      <td className="px-2 py-2">
+        {r.isReference ? <span className="text-[11px] text-[var(--text-3)]">—</span> : <AdjustBar down={r.adjustDown} up={r.adjustUp} />}
+      </td>
+      <td className="px-2 py-2 text-right font-semibold">{Number.isNaN(r.score) ? '—' : r.score.toFixed(0)}</td>
+      <td className="px-2 py-2">
+        {r.isReference ? (
+          <span className="text-[11px] text-[var(--text-3)]">anchor</span>
+        ) : inR ? (
+          <span className="rounded-full bg-[color-mix(in_srgb,var(--status-good)_16%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--status-good)]">
+            ✓ in radius
+          </span>
+        ) : (
+          <span className="text-[11px] text-[var(--text-3)]">outside</span>
+        )}
+      </td>
+      <td className="px-2 py-2 text-right">{fmt(r.trail)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.wheelbase)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.chainstay)}</td>
+      <td className="px-2 py-2 text-right">{fmt(r.tyreMax)}</td>
+      <td className="px-2 py-2">{r.cockpitType ?? '—'}</td>
+      <td className="px-2 py-2 whitespace-nowrap">{stockBuild(r)}</td>
+      <td className="px-2 py-2">
+        {r.sourceUrl ? (
+          <a href={r.sourceUrl} target="_blank" rel="noreferrer" className="text-[var(--acc)] hover:underline">
+            source ↗
+          </a>
+        ) : (
+          <span className="text-[var(--text-3)]">—</span>
+        )}
+      </td>
+    </tr>
   );
 }
 

@@ -32,6 +32,9 @@ export interface CandidateFrame {
   readonly wheelbase?: Millimeters;
   readonly bbDrop?: Millimeters;
   readonly tyreMax?: Millimeters;
+  readonly trail?: Millimeters;
+  readonly cockpitType?: 'open' | 'semi-integrated' | 'integrated';
+  readonly sourceUrl?: string;
   readonly stockStem?: Millimeters;
   readonly stockStemAngle?: Degrees;
   readonly stockSpacers?: Millimeters;

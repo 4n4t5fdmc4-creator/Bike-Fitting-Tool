@@ -28,6 +28,9 @@ const toCandidate = (f: {
   seatTubeAngle?: number | undefined; headTubeLength?: number | undefined;
   chainstay?: number | undefined; effectiveTopTube?: number | undefined;
   wheelbase?: number | undefined; bbDrop?: number | undefined; tyreMax?: number | undefined;
+  trail?: number | undefined;
+  cockpitType?: 'open' | 'semi-integrated' | 'integrated' | undefined;
+  sourceUrl?: string | undefined;
   stockStem?: number | undefined; stockStemAngle?: number | undefined;
   stockSpacers?: number | undefined;
 }): CandidateFrame => ({
@@ -41,6 +44,9 @@ const toCandidate = (f: {
   ...(f.wheelbase !== undefined ? { wheelbase: mm(f.wheelbase) } : {}),
   ...(f.bbDrop !== undefined ? { bbDrop: mm(f.bbDrop) } : {}),
   ...(f.tyreMax !== undefined ? { tyreMax: mm(f.tyreMax) } : {}),
+  ...(f.trail !== undefined ? { trail: mm(f.trail) } : {}),
+  ...(f.cockpitType !== undefined ? { cockpitType: f.cockpitType } : {}),
+  ...(f.sourceUrl ? { sourceUrl: f.sourceUrl } : {}),
   ...(f.stockStem !== undefined ? { stockStem: mm(f.stockStem) } : {}),
   ...(f.stockStemAngle !== undefined ? { stockStemAngle: deg(f.stockStemAngle) } : {}),
   ...(f.stockSpacers !== undefined ? { stockSpacers: mm(f.stockSpacers) } : {}),

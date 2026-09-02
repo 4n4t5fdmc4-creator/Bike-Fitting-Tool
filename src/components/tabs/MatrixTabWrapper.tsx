@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { deg, mm } from '@/domain/units';
+import { deg, mm, toRad } from '@/domain/units';
 import { resolveCockpit } from '@/engine/assumptions';
 import { gripPoint, type FrameCore } from '@/engine/forward';
 import type { ModelRecommendation } from '@/engine/recommend';
@@ -35,20 +35,65 @@ export function MatrixTabWrapper({
   );
 
   const rows: MatrixRow[] = models.flatMap((m) =>
-    m.allSizes.map((s) => ({
-      id: s.frame.id,
-      model: m.model,
-      size: s.frame.size,
-      stack: s.frame.stack,
-      reach: s.frame.reach,
-      deltaStack: s.frame.stack - anchor.stack,
-      deltaReach: s.frame.reach - anchor.reach,
-      requiredStem: s.evaluation.required.stemLength,
-      requiredSpacers: s.evaluation.required.spacerHeight,
-      score: s.evaluation.composite,
-      verdict: s.evaluation.verdict,
-    })),
+    m.allSizes.map((s) => {
+      // Spacer room still available on either side of the recommended build,
+      // expressed as vertical travel at the hoods (spacer mm x sin(head angle)).
+      // The limit is the frame record's own maxSpacerStack - a standard 40 mm
+      // steerer allowance unless the fitter set a different one.
+      const limit = s.frame.maxSpacerStack;
+      const atBuild = Math.min(Math.max(s.evaluation.built.spacerHeight, 0), limit);
+      const vFactor = Math.sin(toRad(s.frame.headTubeAngle));
+      return {
+        id: s.frame.id,
+        model: m.model,
+        size: s.frame.size,
+        stack: s.frame.stack,
+        reach: s.frame.reach,
+        deltaStack: s.frame.stack - anchor.stack,
+        deltaReach: s.frame.reach - anchor.reach,
+        requiredStem: s.evaluation.required.stemLength,
+        requiredSpacers: s.evaluation.required.spacerHeight,
+        score: s.evaluation.composite,
+        verdict: s.evaluation.verdict,
+        trail: s.frame.trail,
+        wheelbase: s.frame.wheelbase,
+        chainstay: s.frame.chainstay,
+        tyreMax: s.frame.tyreMax,
+        cockpitType: s.frame.cockpitType,
+        stockStem: s.frame.stockStem,
+        stockStemAngle: s.frame.stockStemAngle,
+        stockSpacers: s.frame.stockSpacers,
+        sourceUrl: s.frame.sourceUrl,
+        adjustDown: atBuild * vFactor,
+        adjustUp: (limit - atBuild) * vFactor,
+      } satisfies MatrixRow;
+    }),
   );
+
+  // The client's own bike, pinned to the top of the table and marked. Its
+  // stack/reach ARE the anchor when it is on file, so the deltas are zero.
+  const referenceRow: MatrixRow | null = useMemo(() => {
+    if (!referenceBike) return null;
+    return {
+      id: '__reference',
+      model: referenceBike.label || 'Reference bike',
+      size: '—',
+      stack: mm(referenceBike.stack),
+      reach: mm(referenceBike.reach),
+      deltaStack: 0,
+      deltaReach: 0,
+      requiredStem: mm(referenceBike.stemLength),
+      requiredSpacers: mm(referenceBike.spacerHeight),
+      score: NaN,
+      verdict: '—',
+      stockStem: mm(referenceBike.stemLength),
+      stockStemAngle: deg(referenceBike.stemAngle),
+      stockSpacers: mm(referenceBike.spacerHeight),
+      isReference: true,
+      adjustDown: 0,
+      adjustUp: 0,
+    } satisfies MatrixRow;
+  }, [referenceBike]);
 
   // Where the hands land: the recommended build's achieved grip, and where the
   // shared-cockpit build would put them. Both BB-relative.
@@ -99,6 +144,7 @@ export function MatrixTabWrapper({
   return (
     <MatrixTab
       rows={rows}
+      referenceRow={referenceRow}
       anchor={anchor}
       referenceLabel={referenceLabel}
       anchorIsEstimated={anchorIsEstimated}
