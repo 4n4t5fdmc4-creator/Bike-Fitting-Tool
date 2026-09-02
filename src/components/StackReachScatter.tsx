@@ -5,6 +5,7 @@ import { makeProjection, withMinAspect } from '@/lib/projection';
 import { withinFitRadius, type FitTolerance } from '@/lib/fitRadius';
 import { modelColorMap } from '@/lib/modelColors';
 import type { MatrixRow } from './MatrixTab';
+import { PlotTooltip } from './PlotTooltip';
 
 /**
  * Stack/reach scatter, drawn as inline SVG through the shared projection so it
@@ -35,6 +36,7 @@ const MIN_ASPECT = 1.15;
 
 export function StackReachScatter({
   rows, reference, referenceLabel, tol, labelledIds, anchorIsEstimated,
+  hoveredId = null, onHover, pinnedIds,
 }: {
   rows: ReadonlyArray<MatrixRow>;
   reference: { stack: number; reach: number };
@@ -43,6 +45,16 @@ export function StackReachScatter({
   /** Frame ids to draw a text label for - the Overlay tab's current selection. */
   labelledIds: ReadonlySet<string>;
   anchorIsEstimated?: boolean | undefined;
+  /**
+   * The row under the pointer, wherever the pointer is. Owned by MatrixTab so
+   * hovering a table row lights up its dot and hovering a dot lights up its row -
+   * with forty-odd near-identical dots, finding the one you are reading about
+   * was otherwise a matter of counting along an axis.
+   */
+  hoveredId?: string | null;
+  onHover?: (id: string | null) => void;
+  /** Rows clicked in the table: labelled permanently, not just while hovered. */
+  pinnedIds?: ReadonlySet<string>;
 }) {
   const models = useMemo(
     () => [...new Set(rows.map((r) => r.model))],
@@ -185,13 +197,33 @@ export function StackReachScatter({
             stroke="var(--text-2)" strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
           <path d={`M ${cx} ${cy - 6} L ${cx + 6} ${cy} L ${cx} ${cy + 6} L ${cx - 6} ${cy} Z`}
             fill="var(--panel)" stroke="var(--foreground)" strokeWidth={1.5} />
-          {/* 4. one dot per size */}
+          {/* 4. one dot per size, each with a hit area far larger than the mark.
+                 A 4 px dot is a coin-toss to hit with a mouse; the transparent
+                 circle over it is what the pointer actually catches. No <title>
+                 on it: the browser's own tooltip would arrive a second after
+                 the drawn one and say the same thing twice. The table below is
+                 the accessible equivalent, and it carries the pin buttons. */}
           {rows.map((r) => {
             const inR = withinFitRadius(r.deltaReach, r.deltaStack, tol);
+            const on = hoveredId === r.id;
+            const pinned = pinnedIds?.has(r.id) ?? false;
             return (
-              <circle key={r.id} cx={x(r.reach)} cy={y(r.stack)} r={inR ? 4.5 : 3.5}
-                fill={colorOf(r.model)} fillOpacity={inR ? 1 : 0.55}
-                stroke="var(--panel)" strokeWidth={1} />
+              <g key={r.id}>
+                {(on || pinned) && (
+                  <circle cx={x(r.reach)} cy={y(r.stack)} r={on ? 10 : 8}
+                    fill="none" stroke={colorOf(r.model)} strokeWidth={on ? 2 : 1.5}
+                    opacity={on ? 0.9 : 0.55} />
+                )}
+                <circle cx={x(r.reach)} cy={y(r.stack)} r={on ? 6 : inR ? 4.5 : 3.5}
+                  fill={colorOf(r.model)} fillOpacity={on || inR ? 1 : 0.55}
+                  stroke="var(--panel)" strokeWidth={on ? 1.5 : 1} />
+                <circle
+                  cx={x(r.reach)} cy={y(r.stack)} r={11} fill="transparent"
+                  style={{ cursor: onHover ? 'pointer' : 'default' }}
+                  onMouseEnter={() => onHover?.(r.id)}
+                  onMouseLeave={() => onHover?.(null)}
+                />
+              </g>
             );
           })}
 
@@ -209,7 +241,7 @@ export function StackReachScatter({
                 px: cx, py: cy, bold: true,
               },
               ...rows
-                .filter((r) => labelledIds.has(r.id))
+                .filter((r) => labelledIds.has(r.id) || pinnedIds?.has(r.id))
                 .map((r) => ({
                   id: r.id,
                   text: `${r.model} ${r.size}`,
@@ -237,6 +269,26 @@ export function StackReachScatter({
                 </g>
               );
             });
+          })()}
+
+          {/* 6. the hover readout, last so nothing draws over it. */}
+          {(() => {
+            const r = rows.find((row) => row.id === hoveredId);
+            if (!r) return null;
+            const sign = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(0)}`;
+            return (
+              <PlotTooltip
+                x={x(r.reach)} y={y(r.stack)}
+                title={`${r.model} ${r.size}`}
+                color={colorOf(r.model)}
+                lines={[
+                  `stack ${r.stack.toFixed(0)} · reach ${r.reach.toFixed(0)} mm`,
+                  `Δ ${sign(r.deltaStack)} stack · ${sign(r.deltaReach)} reach`,
+                  withinFitRadius(r.deltaReach, r.deltaStack, tol) ? 'within tolerance' : 'outside tolerance',
+                ]}
+                bounds={{ left: 0, right: W, top: 0, bottom: H }}
+              />
+            );
           })()}
         </svg>
       </div>

@@ -100,6 +100,25 @@ export function MatrixTab({
   const [showGeometry, setShowGeometry] = useState(false);
   const [showBuild, setShowBuild] = useState(false);
 
+  /**
+   * The link between the table and the plot, owned here because both halves
+   * need it.
+   *
+   * Hovering is transient and works in both directions: a table row lights up
+   * its dot, a dot lights up its row. Clicking a model name pins it, so the dot
+   * keeps its ring and its label after the pointer has moved on - which is what
+   * you want while you read the rest of the row, or while you point at the
+   * screen and talk to the client.
+   */
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const togglePin = (id: string) =>
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
   const setField = (k: keyof FitTolerance) => (v: number) => setTol((t) => ({ ...t, [k]: v }));
 
   const overlaySelected = useOverlaySelection((s) => s.selectedIds);
@@ -267,6 +286,17 @@ export function MatrixTab({
               ? 'Where each frame ends — raw stack and reach.'
               : 'Where the hands end up once the cockpit is applied, relative to the BB.'}
           </span>
+          {pinnedIds.size > 0 && (
+            <span className="no-print ml-auto flex items-center gap-2 text-[11px] text-[var(--text-3)]">
+              {pinnedIds.size} highlighted
+              <button
+                onClick={() => setPinnedIds(new Set())}
+                className="rounded-md border border-[var(--border)] px-2 py-0.5 text-[var(--text-2)] hover:border-[var(--acc)] hover:text-[var(--foreground)]"
+              >
+                Clear
+              </button>
+            </span>
+          )}
         </div>
 
         {plot === 'hood' && fitMode === 'same-cockpit' && (
@@ -293,6 +323,9 @@ export function MatrixTab({
               tol={tol}
               labelledIds={labelledIds}
               anchorIsEstimated={anchorIsEstimated}
+              hoveredId={hoveredId}
+              onHover={setHoveredId}
+              pinnedIds={pinnedIds}
             />
           ) : (
             <HoodScatter
@@ -304,6 +337,9 @@ export function MatrixTab({
               labelledIds={labelledIds}
               mode={fitMode}
               anchorIsEstimated={anchorIsEstimated}
+              hoveredId={hoveredId}
+              onHover={setHoveredId}
+              pinnedIds={pinnedIds}
             />
           )}
         </div>
@@ -317,6 +353,9 @@ export function MatrixTab({
           </span>
           <ColumnToggle label="Handling &amp; tyres" on={showGeometry} onClick={() => setShowGeometry((v) => !v)} />
           <ColumnToggle label="Build &amp; source" on={showBuild} onClick={() => setShowBuild((v) => !v)} />
+          <span className="ml-auto text-[var(--text-3)]">
+            Hover a row to find it in the plot · click a model name to keep it highlighted
+          </span>
         </div>
         <div className="overflow-x-auto">
           <table className={`tabular w-full text-sm ${colCount > 12 ? 'min-w-[76rem]' : 'min-w-[46rem]'}`}>
@@ -353,11 +392,14 @@ export function MatrixTab({
             <tbody>
               {referenceRow && (
                 <MatrixTr key="__reference" r={referenceRow} withinRadius={withinRadius}
-                  showGeometry={showGeometry} showBuild={showBuild} />
+                  showGeometry={showGeometry} showBuild={showBuild}
+                  hovered={false} pinned={false} onHover={setHoveredId} onTogglePin={togglePin} />
               )}
               {sorted.map((r) => (
                 <MatrixTr key={r.id} r={r} withinRadius={withinRadius}
-                  showGeometry={showGeometry} showBuild={showBuild} />
+                  showGeometry={showGeometry} showBuild={showBuild}
+                  hovered={hoveredId === r.id} pinned={pinnedIds.has(r.id)}
+                  onHover={setHoveredId} onTogglePin={togglePin} />
               ))}
               {sorted.length === 0 && (
                 <tr><td colSpan={colCount} className="px-3 py-6 text-center text-[var(--text-3)]">No catalogue sizes match the current filters.</td></tr>
@@ -420,28 +462,57 @@ function AdjustBar({ down, up }: { down: number; up: number }) {
 }
 
 function MatrixTr({
-  r, withinRadius, showGeometry, showBuild,
+  r, withinRadius, showGeometry, showBuild, hovered, pinned, onHover, onTogglePin,
 }: {
   r: MatrixRow;
   withinRadius: (r: MatrixRow) => boolean;
   showGeometry: boolean;
   showBuild: boolean;
+  hovered: boolean;
+  pinned: boolean;
+  onHover: (id: string | null) => void;
+  onTogglePin: (id: string) => void;
 }) {
   const inR = !r.isReference && withinRadius(r);
-  const dim = !r.isReference && !inR;
+  // A row that is being pointed at or pinned is never dimmed, however far
+  // outside tolerance it is - dimming the row you just asked about is the one
+  // thing the highlight must not do.
+  const dim = !r.isReference && !inR && !hovered && !pinned;
   // The pinned Model cell has to paint over the columns sliding under it, so
   // every row needs a real background - `inherit` on the sticky cell then picks
   // up whichever one this row has.
   const rowBg = r.isReference
     ? 'color-mix(in srgb, var(--acc) 10%, var(--panel))'
-    : 'var(--panel)';
+    : hovered
+      ? 'color-mix(in srgb, var(--acc) 12%, var(--panel))'
+      : pinned
+        ? 'color-mix(in srgb, var(--acc) 6%, var(--panel))'
+        : 'var(--panel)';
   return (
     <tr
       className={`border-t border-[var(--border)] ${dim ? 'opacity-50' : ''}`}
       style={{ background: rowBg }}
+      onMouseEnter={() => !r.isReference && onHover(r.id)}
+      onMouseLeave={() => !r.isReference && onHover(null)}
     >
       <td className="sticky left-0 z-[1] px-3 py-2" style={{ background: 'inherit' }}>
-        {r.model}
+        {r.isReference ? (
+          r.model
+        ) : (
+          // A real button, so the pin is reachable by keyboard and focusing it
+          // highlights the dot exactly as hovering does.
+          <button
+            onClick={() => onTogglePin(r.id)}
+            onFocus={() => onHover(r.id)}
+            onBlur={() => onHover(null)}
+            aria-pressed={pinned}
+            title={pinned ? 'Stop highlighting this size in the plot' : 'Highlight this size in the plot'}
+            className="text-left underline-offset-2 hover:underline"
+          >
+            {pinned && <span aria-hidden className="mr-1 text-[var(--acc)]">●</span>}
+            {r.model}
+          </button>
+        )}
         {r.isReference && (
           <span className="ml-2 rounded-full bg-[color-mix(in_srgb,var(--acc)_20%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--acc)]">
             ★ reference

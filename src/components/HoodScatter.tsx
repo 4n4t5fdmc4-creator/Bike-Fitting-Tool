@@ -5,6 +5,7 @@ import { makeProjection, withMinAspect } from '@/lib/projection';
 import { modelColorMap } from '@/lib/modelColors';
 import type { FitTolerance } from '@/lib/fitRadius';
 import type { FitMode } from '@/state/comparisonMode';
+import { PlotTooltip } from './PlotTooltip';
 
 /**
  * Where the hands actually end up: hood grip X against hood grip Y, both
@@ -33,6 +34,7 @@ interface HoodPoint {
 
 export function HoodScatter({
   points, reference, referenceMarker, referenceLabel, tol, labelledIds, mode, anchorIsEstimated,
+  hoveredId = null, onHover, pinnedIds,
 }: {
   points: ReadonlyArray<HoodPoint>;
   /** Window centre - the reference hood position (target grip). */
@@ -44,6 +46,10 @@ export function HoodScatter({
   labelledIds: ReadonlySet<string>;
   mode: FitMode;
   anchorIsEstimated?: boolean | undefined;
+  /** Shared with the table and the stack/reach plot - see StackReachScatter. */
+  hoveredId?: string | null;
+  onHover?: (id: string | null) => void;
+  pinnedIds?: ReadonlySet<string>;
 }) {
   const models = useMemo(() => [...new Set(points.map((p) => p.model))], [points]);
   const colorOf = useMemo(() => modelColorMap(models), [models]);
@@ -145,13 +151,20 @@ export function HoodScatter({
           <line x1={cx} y1={plotTop} x2={cx} y2={plotBottom}
             stroke="var(--text-2)" strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
 
-          {/* one dot per size */}
+          {/* one dot per size, with a hit area wider than the mark */}
           {points.map((p) => {
-            const labelled = labelledIds.has(p.id);
+            const on = hoveredId === p.id;
+            const pinned = pinnedIds?.has(p.id) ?? false;
+            const labelled = labelledIds.has(p.id) || pinned;
             return (
               <g key={p.id}>
-                <circle cx={x(p.x)} cy={y(p.y)} r={4} fill={colorOf(p.model)}
-                  stroke="var(--panel)" strokeWidth={1} />
+                {(on || pinned) && (
+                  <circle cx={x(p.x)} cy={y(p.y)} r={on ? 10 : 8}
+                    fill="none" stroke={colorOf(p.model)} strokeWidth={on ? 2 : 1.5}
+                    opacity={on ? 0.9 : 0.55} />
+                )}
+                <circle cx={x(p.x)} cy={y(p.y)} r={on ? 6 : 4} fill={colorOf(p.model)}
+                  stroke="var(--panel)" strokeWidth={on ? 1.5 : 1} />
                 {labelled && (
                   <text x={x(p.x) + 7} y={y(p.y) - 6} fontSize={10} fontWeight={600}
                     fill="var(--foreground)" stroke="var(--panel)" strokeWidth={3}
@@ -159,6 +172,12 @@ export function HoodScatter({
                     {p.model} {p.size}
                   </text>
                 )}
+                <circle
+                  cx={x(p.x)} cy={y(p.y)} r={11} fill="transparent"
+                  style={{ cursor: onHover ? 'pointer' : 'default' }}
+                  onMouseEnter={() => onHover?.(p.id)}
+                  onMouseLeave={() => onHover?.(null)}
+                />
               </g>
             );
           })}
@@ -176,6 +195,26 @@ export function HoodScatter({
               </text>
             </>
           )}
+
+          {/* hover readout, last so nothing draws over it */}
+          {(() => {
+            const p = points.find((q) => q.id === hoveredId);
+            if (!p) return null;
+            const sign = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(0)}`;
+            return (
+              <PlotTooltip
+                x={x(p.x)} y={y(p.y)}
+                title={`${p.model} ${p.size}`}
+                color={colorOf(p.model)}
+                lines={[
+                  `hood ${p.x.toFixed(0)} × ${p.y.toFixed(0)} mm from the BB`,
+                  `Δ ${sign(p.x - reference.x)} reach · ${sign(p.y - reference.y)} stack`,
+                  mode === 'as-fitted' ? 'built to its own target' : 'on the shared cockpit',
+                ]}
+                bounds={{ left: 0, right: W, top: 0, bottom: H }}
+              />
+            );
+          })()}
         </svg>
       </div>
 
